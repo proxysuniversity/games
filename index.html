@@ -1,11 +1,10 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Proxy University Arcade</title>
+    <title>Proxy University Games</title>
 
     <link
         rel="icon"
@@ -241,7 +240,7 @@
                 <div
                     class="announcement-title"
                     id="announcementTitle">
-                    ANNOUNCEMENT
+                    this website is still in it's testing stage
                 </div>
 
                 <div
@@ -267,14 +266,14 @@
         <div id="gamesList"></div>
 
         <div id="emptyMessage">
-            No games available right now.
+            ain't no games rn bro
         </div>
 
     </main>
 
 
     <div class="bottom-info">
-        Proxy University Games — games hosted through Proxy University.
+        Proxy University Games — created by aaron carter obv bro....
     </div>
 
 
@@ -323,7 +322,7 @@
                 name: "test game",
                 image: "",
                 link: "",
-                file: "basket-random.html",
+                file: "space-waves.html",
                 description: "",
                 hide: false,
                 justImage: false
@@ -727,6 +726,9 @@
 
             gameWindow.document.close();
 
+            gameWindow.document.title =
+                "Proxy University Games│" + game.name;
+
 
             const frame =
                 gameWindow.document.getElementById(
@@ -983,4 +985,3 @@
 
 </body>
 </html>
-```
