@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -965,6 +966,18 @@
                 "block";
 
         }
+
+
+        window.addEventListener(
+            "beforeunload",
+            function(event) {
+
+                event.preventDefault();
+
+                event.returnValue = "";
+
+            }
+        );
 
     </script>
 
