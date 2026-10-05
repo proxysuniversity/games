@@ -257,6 +257,7 @@
 
         <button
             class="header-button"
+            type="button"
             onclick="window.location.href='https://www.instagram.com/aaron_thecarter/'">
             Support Me
         </button>
@@ -284,6 +285,50 @@
 
 <script>
 
+    /*
+     * ============================================================
+     * BEFOREUNLOAD PROTECTION
+     * ============================================================
+     *
+     * This is intentionally the FIRST JavaScript code executed.
+     *
+     * Modern browsers do NOT allow a beforeunload confirmation
+     * dialog to appear simply because the page loaded.
+     *
+     * The browser may show its built-in confirmation dialog when
+     * the user attempts to leave, reload, or close the page.
+     *
+     * Custom beforeunload text is intentionally ignored by
+     * modern browsers.
+     */
+
+    window.addEventListener(
+        "beforeunload",
+        function (event) {
+
+            event.preventDefault();
+
+            /*
+             * Required legacy-compatible signal.
+             * An empty string is the standards-compatible value.
+             */
+            event.returnValue = "";
+
+            return "";
+
+        },
+        {
+            capture: true
+        }
+    );
+
+
+    /*
+     * ============================================================
+     * ANNOUNCEMENTS
+     * ============================================================
+     */
+
     const announcements = [
         "Legitimate games for you're Chromebook!",
         "I picked 7+ real games that you can choose from.",
@@ -298,14 +343,21 @@
         ];
 
     const announcementMessage =
-        document.getElementById("announcementMessage");
+        document.getElementById(
+            "announcementMessage"
+        );
 
     const announcementArea =
-        document.getElementById("announcementArea");
+        document.getElementById(
+            "announcementArea"
+        );
 
-    if (randomAnnouncement.trim() === "") {
+    if (
+        randomAnnouncement.trim() === ""
+    ) {
 
-        announcementArea.style.display = "none";
+        announcementArea.style.display =
+            "none";
 
     }
     else {
@@ -315,6 +367,12 @@
 
     }
 
+
+    /*
+     * ============================================================
+     * GAME DATA
+     * ============================================================
+     */
 
     const games = [
 
@@ -571,41 +629,79 @@
     ];
 
 
+    /*
+     * ============================================================
+     * ELEMENTS
+     * ============================================================
+     */
+
     const gamesList =
-        document.getElementById("gamesList");
+        document.getElementById(
+            "gamesList"
+        );
 
     const emptyMessage =
-        document.getElementById("emptyMessage");
+        document.getElementById(
+            "emptyMessage"
+        );
 
     let visibleGames = 0;
 
 
-    function openGame(game) {
+    /*
+     * ============================================================
+     * URL / TEXT SAFETY HELPERS
+     * ============================================================
+     */
 
-        let gameURL = "";
+    function escapeHTML(value) {
+
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+    }
+
+
+    function escapeAttribute(value) {
+
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+    }
+
+
+    /*
+     * ============================================================
+     * BUILD GITHUB PAGES FILE URL
+     * ============================================================
+     */
+
+    function getGameURL(game) {
 
         /*
-         * LINK MODE
-         * If "link" is filled in, use that exact URL.
+         * LINK HAS PRIORITY.
          */
         if (
             typeof game.link === "string" &&
             game.link.trim() !== ""
         ) {
 
-            gameURL =
-                game.link.trim();
+            return game.link.trim();
 
         }
 
+
         /*
-         * FILE MODE
+         * FILE MODE.
          *
-         * Files are always loaded from:
-         *
-         * https://proxysuniversity.github.io/games/
-         *
-         * So:
+         * Example:
          *
          * file: "spacegame.html"
          *
@@ -613,7 +709,7 @@
          *
          * https://proxysuniversity.github.io/games/spacegame.html
          */
-        else if (
+        if (
             typeof game.file === "string" &&
             game.file.trim() !== ""
         ) {
@@ -622,13 +718,34 @@
                 game.file.trim();
 
             cleanFile =
-                cleanFile.replace(/^\/+/, "");
+                cleanFile.replace(
+                    /^\/+/,
+                    ""
+                );
 
-            gameURL =
+            return (
                 "https://proxysuniversity.github.io/games/" +
-                cleanFile;
+                cleanFile
+            );
 
         }
+
+
+        return "";
+
+    }
+
+
+    /*
+     * ============================================================
+     * OPEN GAME
+     * ============================================================
+     */
+
+    function openGame(game) {
+
+        const gameURL =
+            getGameURL(game);
 
 
         if (gameURL === "") {
@@ -637,7 +754,10 @@
 
 
         /*
-         * OPEN A REAL ABOUT:BLANK WINDOW
+         * OPEN IMMEDIATELY FROM THE USER'S CLICK.
+         *
+         * This helps prevent popup blockers from blocking
+         * the about:blank wrapper.
          */
         const gameWindow =
             window.open(
@@ -649,8 +769,8 @@
         if (!gameWindow) {
 
             /*
-             * If the browser blocks popups,
-             * just open the actual game normally.
+             * Popup blocked:
+             * load the GitHub Pages game directly.
              */
             window.location.href =
                 gameURL;
@@ -660,126 +780,133 @@
         }
 
 
+        const gameTitle =
+            "Proxy University Games│" +
+            (
+                game.name.trim() !== ""
+                    ? game.name.trim()
+                    : "Game"
+            );
+
+
         /*
-         * CREATE THE CLOAKED GAME PAGE
+         * CREATE THE ABOUT:BLANK WRAPPER.
          */
         gameWindow.document.open();
 
-        gameWindow.document.write(`
-            <!DOCTYPE html>
+        gameWindow.document.write(
+            "<!DOCTYPE html>" +
+            "<html lang='en'>" +
 
-            <html lang="en">
+            "<head>" +
 
-            <head>
+            "<meta charset='UTF-8'>" +
 
-                <meta charset="UTF-8">
+            "<meta name='viewport' " +
+            "content='width=device-width, initial-scale=1.0'>" +
 
-                <meta
-                    name="viewport"
-                    content="width=device-width, initial-scale=1.0"
-                >
+            "<title>" +
+            escapeHTML(gameTitle) +
+            "</title>" +
 
-                <title>Proxy University Games│${escapeHTML(game.name || "Game")}</title>
+            "<style>" +
 
-                <style>
+            "html,body{" +
+                "margin:0;" +
+                "padding:0;" +
+                "width:100%;" +
+                "height:100%;" +
+                "overflow:hidden;" +
+                "background:#000;" +
+            "}" +
 
-                    html,
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        width: 100%;
-                        height: 100%;
-                        overflow: hidden;
-                        background: #000;
-                    }
+            "#gameFrame{" +
+                "position:fixed;" +
+                "top:0;" +
+                "left:0;" +
+                "width:100%;" +
+                "height:100%;" +
+                "border:0;" +
+                "background:#000;" +
+            "}" +
 
-                    #gameFrame {
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        border: 0;
-                        background: #000;
-                    }
+            "#proxyLogo{" +
+                "position:fixed;" +
+                "top:12px;" +
+                "right:12px;" +
+                "width:170px;" +
+                "max-width:30vw;" +
+                "height:auto;" +
+                "z-index:999999;" +
+                "cursor:pointer;" +
+                "opacity:.9;" +
+            "}" +
 
-                    #proxyLogo {
-                        position: fixed;
-                        top: 12px;
-                        right: 12px;
-                        width: 170px;
-                        max-width: 30vw;
-                        height: auto;
-                        z-index: 999999;
-                        cursor: pointer;
-                        opacity: .9;
-                    }
+            "#proxyLogo:hover{" +
+                "opacity:1;" +
+            "}" +
 
-                    #proxyLogo:hover {
-                        opacity: 1;
-                    }
+            "#backButton{" +
+                "position:fixed;" +
+                "top:12px;" +
+                "left:12px;" +
+                "z-index:999999;" +
+                "background:#000;" +
+                "color:#fff;" +
+                "border:1px solid #fff;" +
+                "padding:10px 15px;" +
+                "font-family:Arial,Helvetica,sans-serif;" +
+                "font-size:14px;" +
+                "font-weight:bold;" +
+                "cursor:pointer;" +
+                "opacity:.9;" +
+            "}" +
 
-                    #backButton {
-                        position: fixed;
-                        top: 12px;
-                        left: 12px;
-                        z-index: 999999;
-                        background: #000;
-                        color: #fff;
-                        border: 1px solid #fff;
-                        padding: 10px 15px;
-                        font-family: Arial, Helvetica, sans-serif;
-                        font-size: 14px;
-                        font-weight: bold;
-                        cursor: pointer;
-                        opacity: .9;
-                    }
+            "#backButton:hover{" +
+                "background:#fff;" +
+                "color:#000;" +
+            "}" +
 
-                    #backButton:hover {
-                        background: #fff;
-                        color: #000;
-                    }
+            "</style>" +
 
-                </style>
+            "</head>" +
 
-            </head>
+            "<body>" +
 
-            <body>
+            "<iframe " +
+                "id='gameFrame' " +
+                "src='" +
+                escapeAttribute(gameURL) +
+                "' " +
+                "allow='fullscreen; autoplay; gamepad' " +
+                "allowfullscreen>" +
+            "</iframe>" +
 
-                <iframe
-                    id="gameFrame"
-                    allow="fullscreen; autoplay; gamepad"
-                    allowfullscreen
-                    src="${escapeAttribute(gameURL)}">
-                </iframe>
+            "<img " +
+                "id='proxyLogo' " +
+                "src='https://proxysuniversity.github.io/gamesarewattt.png' " +
+                "alt='Proxy University Games' " +
+                "title='Back to Proxy University Games'>" +
 
-                <img
-                    id="proxyLogo"
-                    src="https://proxysuniversity.github.io/gamesarewattt.png"
-                    alt="Proxy University Games"
-                    title="Back to Proxy University Games"
-                >
+            "<button " +
+                "id='backButton' " +
+                "type='button'>" +
+                "BACK" +
+            "</button>" +
 
-                <button
-                    id="backButton">
-                    BACK
-                </button>
+            "</body>" +
 
-            </body>
-
-            </html>
-        `);
+            "</html>"
+        );
 
         gameWindow.document.close();
 
 
         /*
-         * FORCE THE CORRECT TITLE AFTER THE PAGE
-         * HAS BEEN CREATED.
+         * SET TITLE AGAIN AFTER DOCUMENT CREATION.
          */
         gameWindow.document.title =
-            "Proxy University Games│" +
-            (game.name || "Game");
+            gameTitle;
 
 
         const logo =
@@ -798,7 +925,7 @@
          */
         logo.addEventListener(
             "click",
-            function() {
+            function () {
 
                 gameWindow.location.href =
                     "https://proxysuniversity.github.io/games";
@@ -812,7 +939,7 @@
          */
         backButton.addEventListener(
             "click",
-            function() {
+            function () {
 
                 gameWindow.location.href =
                     "https://proxysuniversity.github.io/games";
@@ -827,36 +954,13 @@
 
 
     /*
-     * ESCAPE TEXT USED IN THE ABOUT:BLANK PAGE
+     * ============================================================
+     * RENDER GAMES
+     * ============================================================
      */
-    function escapeHTML(value) {
-
-        return String(value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-
-    }
-
-
-    /*
-     * ESCAPE URL USED INSIDE THE IFRAME
-     */
-    function escapeAttribute(value) {
-
-        return String(value)
-            .replace(/&/g, "&amp;")
-            .replace(/"/g, "&quot;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-
-    }
-
 
     games.forEach(
-        function(game) {
+        function (game) {
 
             if (game.hide === true) {
                 return;
@@ -877,9 +981,14 @@
 
 
             const gameElement =
-                document.createElement("div");
+                document.createElement(
+                    "div"
+                );
 
 
+            /*
+             * IMAGE-ONLY GAME
+             */
             if (
                 game.justImage === true &&
                 game.image.trim() !== ""
@@ -890,7 +999,9 @@
 
 
                 const image =
-                    document.createElement("img");
+                    document.createElement(
+                        "img"
+                    );
 
 
                 image.className =
@@ -910,6 +1021,10 @@
                 );
 
             }
+
+            /*
+             * NORMAL GAME
+             */
             else {
 
                 gameElement.className =
@@ -921,7 +1036,9 @@
                 ) {
 
                     const image =
-                        document.createElement("img");
+                        document.createElement(
+                            "img"
+                        );
 
 
                     image.className =
@@ -944,7 +1061,9 @@
 
 
                 const info =
-                    document.createElement("div");
+                    document.createElement(
+                        "div"
+                    );
 
 
                 info.className =
@@ -956,7 +1075,9 @@
                 ) {
 
                     const name =
-                        document.createElement("div");
+                        document.createElement(
+                            "div"
+                        );
 
 
                     name.className =
@@ -979,7 +1100,9 @@
                 ) {
 
                     const description =
-                        document.createElement("div");
+                        document.createElement(
+                            "div"
+                        );
 
 
                     description.className =
@@ -1002,7 +1125,9 @@
                 ) {
 
                     const linkText =
-                        document.createElement("div");
+                        document.createElement(
+                            "div"
+                        );
 
 
                     linkText.className =
@@ -1030,7 +1155,7 @@
 
             gameElement.addEventListener(
                 "click",
-                function() {
+                function () {
 
                     openGame(game);
 
@@ -1046,27 +1171,17 @@
     );
 
 
-    if (visibleGames === 0) {
+    /*
+     * EMPTY GAME LIST
+     */
+    if (
+        visibleGames === 0
+    ) {
 
         emptyMessage.style.display =
             "block";
 
     }
-
-
-    /*
-     * LEAVE-PAGE WARNING
-     */
-    window.addEventListener(
-        "beforeunload",
-        function(event) {
-
-            event.preventDefault();
-
-            event.returnValue = "";
-
-        }
-    );
 
 </script>
 ```
