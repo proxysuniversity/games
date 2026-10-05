@@ -1,860 +1,1249 @@
 ```html
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proxy University Games</title>
 
-    <style>
-        * {
-            box-sizing: border-box;
-        }
+<title>Proxy University Games</title>
 
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            min-height: 100%;
-            background: #000;
-            color: #fff;
-            font-family: Arial, Helvetica, sans-serif;
-        }
+<link
+    rel="icon"
+    href="https://proxysuniversity.github.io/gamesarewattt.png"
+>
 
-        body {
-            min-height: 100vh;
-        }
+<style>
 
-        /* BLOCKED OVERLAY */
-        #blockedOverlay {
-            position: fixed;
-            inset: 0;
-            z-index: 2147483647;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 1;
-            visibility: visible;
-            transition: opacity 0.5s ease, visibility 0.5s ease;
-            cursor: pointer;
-            user-select: none;
-            -webkit-user-select: none;
-        }
+    * {
+        box-sizing: border-box;
+    }
 
-        #blockedOverlay.hidden {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-        }
+    html,
+    body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        color: #fff;
+        font-family: Arial, Helvetica, sans-serif;
+    }
 
-        #blockedImage {
-            display: block;
-            max-width: 90vw;
-            max-height: 90vh;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-            user-select: none;
-            -webkit-user-select: none;
-            -webkit-user-drag: none;
-        }
+    /*
+     * ============================================================
+     * BLOCKED IMAGE OVERLAY
+     * ============================================================
+     */
+
+    #blockedOverlay {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #000;
+        z-index: 2147483647;
+        overflow: hidden;
+        cursor: pointer;
+        opacity: 1;
+        visibility: visible;
+        transition:
+            opacity 0.5s ease,
+            visibility 0.5s ease;
+    }
+
+    #blockedOverlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    #blockedImage {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        display: block;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-user-drag: none;
+        pointer-events: none;
+    }
+
+
+    header {
+        width: 100%;
+        min-height: 104px;
+        border-bottom: 1px solid #222;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 25px;
+        background: #000;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+    }
+
+    .header-logo {
+        width: 300px;
+        max-width: 45vw;
+        height: auto;
+        display: block;
+    }
+
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .announcement-area {
+        text-align: right;
+        margin-right: 10px;
+        min-width: 250px;
+    }
+
+    .announcement-title {
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    .announcement-message {
+        font-size: 16px;
+        margin-top: 4px;
+    }
+
+    .header-button {
+        background: #000;
+        color: #fff;
+        border: 1px solid #fff;
+        padding: 11px 16px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .header-button:hover {
+        background: #fff;
+        color: #000;
+    }
+
+    main {
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 35px 25px 50px;
+    }
+
+    #gamesList {
+        width: 100%;
+    }
+
+    .game {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 20px 0;
+        border-bottom: 1px solid #222;
+        cursor: pointer;
+    }
+
+    .game-image {
+        width: 180px;
+        height: 100px;
+        object-fit: cover;
+        display: block;
+        flex-shrink: 0;
+    }
+
+    .game-info {
+        flex: 1;
+    }
+
+    .game-name {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 7px;
+    }
+
+    .game-description {
+        font-size: 15px;
+        color: #ccc;
+        line-height: 1.4;
+    }
+
+    .game-link {
+        font-size: 13px;
+        color: #aaa;
+        margin-top: 8px;
+    }
+
+    .just-image-game {
+        display: inline-block;
+        padding: 20px 0;
+    }
+
+    .just-image-game .game-image {
+        width: 180px;
+        height: auto;
+    }
+
+    #emptyMessage {
+        display: none;
+        padding: 40px 0;
+        color: #aaa;
+        font-size: 16px;
+    }
+
+    .bottom-info {
+        border-top: 1px solid #222;
+        padding: 25px;
+        text-align: center;
+        color: #777;
+        font-size: 13px;
+    }
+
+    @media (max-width: 700px) {
 
         header {
-            width: 100%;
-            padding: 18px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 25px;
-            border-bottom: 1px solid #222;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 20px;
+            padding: 20px;
         }
 
-        .logo {
-            display: block;
-            max-width: 240px;
-            max-height: 90px;
-            object-fit: contain;
+        .header-left {
+            justify-content: center;
+        }
+
+        .header-logo {
+            width: 260px;
+            max-width: 80vw;
         }
 
         .header-right {
-            text-align: right;
-            margin-left: auto;
+            justify-content: center;
+            flex-wrap: wrap;
         }
 
-        .announcement {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 7px;
-        }
-
-        .message {
-            font-size: 13px;
-            color: #bbb;
-            margin-bottom: 8px;
-        }
-
-        .support {
-            color: #fff;
-            text-decoration: underline;
-            font-size: 13px;
+        .announcement-area {
+            min-width: 0;
+            text-align: center;
+            margin-right: 0;
         }
 
         main {
-            width: 100%;
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 30px 24px 50px;
-        }
-
-        .games {
-            width: 100%;
+            padding: 25px 20px 40px;
         }
 
         .game {
-            width: 100%;
-            padding: 18px 0;
-            border-bottom: 1px solid #222;
-            cursor: pointer;
-        }
-
-        .game-content {
-            display: flex;
-            align-items: center;
-            gap: 18px;
+            align-items: flex-start;
+            gap: 15px;
         }
 
         .game-image {
             width: 130px;
-            height: 85px;
-            object-fit: cover;
-            flex-shrink: 0;
-        }
-
-        .game-text {
-            min-width: 0;
+            height: 75px;
         }
 
         .game-name {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 7px;
+            font-size: 18px;
         }
 
         .game-description {
             font-size: 14px;
-            line-height: 1.5;
-            color: #bbb;
         }
 
-        .image-only {
-            display: block;
-        }
+    }
 
-        .image-only img {
-            display: block;
-            width: 100%;
-            max-width: 500px;
-            max-height: 300px;
-            object-fit: cover;
-        }
+</style>
 
-        footer {
-            width: 100%;
-            border-top: 1px solid #222;
-            padding: 20px 24px;
-            text-align: center;
-            color: #777;
-            font-size: 12px;
-        }
-
-        @media (max-width: 700px) {
-            header {
-                padding: 15px;
-                align-items: flex-start;
-            }
-
-            .logo {
-                max-width: 170px;
-                max-height: 70px;
-            }
-
-            .header-right {
-                max-width: 55%;
-            }
-
-            .announcement {
-                font-size: 12px;
-            }
-
-            .message,
-            .support {
-                font-size: 11px;
-            }
-
-            main {
-                padding: 20px 15px 40px;
-            }
-
-            .game-content {
-                gap: 12px;
-            }
-
-            .game-image {
-                width: 100px;
-                height: 70px;
-            }
-
-            .game-name {
-                font-size: 17px;
-            }
-
-            .game-description {
-                font-size: 12px;
-            }
-        }
-    </style>
 </head>
 
 <body>
 
-    <!-- BLOCKED IMAGE OVERLAY -->
-    <div id="blockedOverlay" aria-hidden="false">
-        <img
-            id="blockedImage"
-            src="https://proxysuniversity.github.io/blocked.png"
-            alt="Blocked"
-            draggable="false"
-        >
-    </div>
 
-    <header>
-        <img
-            class="logo"
-            src="https://proxysuniversity.github.io/gamesarewattt.png"
-            alt="Proxy University Games"
-        >
+<!-- ============================================================
+     FULL-SCREEN BLOCKED.PNG
+     ============================================================ -->
 
-        <div class="header-right">
-            <div class="announcement">
-                this website is still in it's testing stage
-            </div>
-
-            <div class="message" id="announcementMessage"></div>
-
-            <a
-                class="support"
-                href="https://www.instagram.com/aaron_thecarter/"
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                Support Me
-            </a>
-        </div>
-    </header>
-
-    <main>
-        <div class="games" id="games"></div>
-    </main>
-
-    <footer>
-        Proxy University Games
-    </footer>
-
-    <script>
-        /*
-         * BEFOREUNLOAD
-         * Must be registered as early as possible.
-         * Modern browsers only display their native confirmation
-         * when the user actually attempts to leave/reload/close.
-         */
-        window.addEventListener(
-            "beforeunload",
-            function (event) {
-                event.preventDefault();
-                event.returnValue = "";
-                return "";
-            },
-            { capture: true }
-        );
-
-        /* BLOCKED OVERLAY */
-        const blockedOverlay = document.getElementById("blockedOverlay");
-
-        function hideBlockedOverlay() {
-            if (!blockedOverlay) return;
-
-            blockedOverlay.classList.add("hidden");
-            blockedOverlay.setAttribute("aria-hidden", "true");
-
-            setTimeout(function () {
-                if (blockedOverlay && blockedOverlay.parentNode) {
-                    blockedOverlay.remove();
-                }
-            }, 500);
-        }
-
-        /*
-         * The overlay is active immediately.
-         * Clicking/tapping it dismisses it after a short delay.
-         */
-        blockedOverlay.addEventListener(
-            "click",
-            function () {
-                setTimeout(hideBlockedOverlay, 500);
-            },
-            { once: true }
-        );
-
-        blockedOverlay.addEventListener(
-            "touchend",
-            function () {
-                setTimeout(hideBlockedOverlay, 500);
-            },
-            { once: true }
-        );
-
-        const announcements = [
-            "Legitimate games for you're Chromebook!",
-            "I picked 7+ real games that you can choose from.",
-            "these games also save data!"
-        ];
-
-        const announcementMessage =
-            announcements[Math.floor(Math.random() * announcements.length)];
-
-        document.getElementById("announcementMessage").textContent =
-            announcementMessage;
-
-        const games = [
-            {
-                id: "8y3spc",
-                name: "Ragdoll Archers",
-                image: "https://play-lh.googleusercontent.com/15zkozUZzNZXG2Hx_FdE0S9paEUGP6ufaKr_VXDK6Tl2ytLDjA7967wb561g1B39oqp30loRsHFQpIKjbO3l-A",
-                link: "https://proxysuniversity.github.io/games/ragdoll-archers.htm",
-                file: "",
-                description: "Ragdoll Archers is a physics-based, action-packed stickman archery game developed by Ericetto.",
-                hide: false,
-                justImage: true
-            },
-
-            {
-                id: "slot2",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot3",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot4",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot5",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot6",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot7",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot8",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot9",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot10",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot11",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot12",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot13",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot14",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot15",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot16",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot17",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot18",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot19",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot20",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot21",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot22",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot23",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot24",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            },
-
-            {
-                id: "slot25",
-                name: "",
-                image: "",
-                link: "",
-                file: "",
-                description: "",
-                hide: true,
-                justImage: false
-            }
-        ];
-
-        function escapeHTML(value) {
-            return String(value ?? "")
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
-
-        function escapeAttribute(value) {
-            return escapeHTML(value);
-        }
-
-        function getGameURL(game) {
-            if (game.link && game.link.trim() !== "") {
-                return game.link.trim();
-            }
-
-            if (game.file && game.file.trim() !== "") {
-                const cleanFile = game.file.trim().replace(/^\/+/, "");
-                return "https://proxysuniversity.github.io/games/" + cleanFile;
-            }
-
-            return "";
-        }
-
-        function openGame(game) {
-            const gameURL = getGameURL(game);
-
-            if (!gameURL) {
-                return;
-            }
-
-            const newWindow = window.open("about:blank", "_blank");
-
-            if (!newWindow) {
-                alert("Please allow pop-ups for Proxy University Games.");
-                return;
-            }
-
-            const gameTitle =
-                game.name && game.name.trim()
-                    ? game.name.trim()
-                    : "Game";
-
-            const safeTitle = escapeHTML(
-                "Proxy University Games│" + gameTitle
-            );
-
-            const safeURL = escapeAttribute(gameURL);
-
-            const wrapperHTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-    <title>${safeTitle}</title>
-
-    <style>
-        html,
-        body {
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background: #000;
-        }
-
-        #gameFrame {
-            position: fixed;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            border: 0;
-            background: #000;
-        }
-
-        #proxyLogo {
-            position: fixed;
-            top: 12px;
-            right: 12px;
-            width: 120px;
-            max-height: 55px;
-            object-fit: contain;
-            z-index: 999999;
-            cursor: pointer;
-        }
-
-        #backButton {
-            position: fixed;
-            top: 12px;
-            left: 12px;
-            z-index: 999999;
-            padding: 8px 14px;
-            border: 1px solid #fff;
-            border-radius: 4px;
-            background: #000;
-            color: #fff;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 13px;
-            cursor: pointer;
-        }
-
-        #backButton:hover {
-            background: #fff;
-            color: #000;
-        }
-    </style>
-</head>
-
-<body>
-
-    <iframe
-        id="gameFrame"
-        src="${safeURL}"
-        allow="autoplay; fullscreen; gamepad"
-        allowfullscreen
-        referrerpolicy="no-referrer"
-    ></iframe>
-
-    <button id="backButton" type="button">
-        BACK
-    </button>
+<div id="blockedOverlay">
 
     <img
-        id="proxyLogo"
-        src="https://proxysuniversity.github.io/gamesarewattt.png"
-        alt="Proxy University Games"
+        id="blockedImage"
+        src="https://proxysuniversity.github.io/blocked.png"
+        alt="Blocked"
         draggable="false"
     >
 
-    <script>
-        const logo = document.getElementById("proxyLogo");
-        const backButton = document.getElementById("backButton");
+</div>
 
-        logo.addEventListener("click", function () {
+
+<header>
+
+    <div class="header-left">
+
+        <img
+            class="header-logo"
+            src="https://proxysuniversity.github.io/gamesarewattt.png"
+            alt="Proxy's University Games"
+        >
+
+    </div>
+
+    <div class="header-right">
+
+        <div
+            class="announcement-area"
+            id="announcementArea">
+
+            <div
+                class="announcement-title"
+                id="announcementTitle">
+                this website is still in it's testing stage
+            </div>
+
+            <div
+                class="announcement-message"
+                id="announcementMessage">
+            </div>
+
+        </div>
+
+        <button
+            class="header-button"
+            type="button"
+            onclick="window.location.href='https://www.instagram.com/aaron_thecarter/'">
+            Support Me
+        </button>
+
+    </div>
+
+</header>
+
+
+<main>
+
+    <div id="gamesList"></div>
+
+    <div id="emptyMessage">
+        ain't no games rn bro
+    </div>
+
+</main>
+
+
+<div class="bottom-info">
+    Proxy University Games — created by aaron carter obv bro....
+</div>
+
+
+<script>
+
+    /*
+     * ============================================================
+     * BEFOREUNLOAD PROTECTION
+     * ============================================================
+     */
+
+    window.addEventListener(
+        "beforeunload",
+        function (event) {
+
+            event.preventDefault();
+
+            event.returnValue = "";
+
+            return "";
+
+        },
+        {
+            capture: true
+        }
+    );
+
+
+    /*
+     * ============================================================
+     * BLOCKED.PNG OVERLAY
+     * ============================================================
+     */
+
+    const blockedOverlay =
+        document.getElementById(
+            "blockedOverlay"
+        );
+
+
+    function hideBlockedOverlay() {
+
+        blockedOverlay.classList.add(
+            "hidden"
+        );
+
+        setTimeout(
+            function () {
+
+                if (
+                    blockedOverlay &&
+                    blockedOverlay.parentNode
+                ) {
+
+                    blockedOverlay.remove();
+
+                }
+
+            },
+            500
+        );
+
+    }
+
+
+    /*
+     * Click/tap the blocked image to dismiss it.
+     */
+    blockedOverlay.addEventListener(
+        "pointerdown",
+        function () {
+
+            setTimeout(
+                hideBlockedOverlay,
+                500
+            );
+
+        },
+        {
+            once: true
+        }
+    );
+
+
+    /*
+     * ============================================================
+     * ANNOUNCEMENTS
+     * ============================================================
+     */
+
+    const announcements = [
+        "Legitimate games for you're Chromebook!",
+        "I picked 7+ real games that you can choose from.",
+        "these games also save data!"
+    ];
+
+    const randomAnnouncement =
+        announcements[
+            Math.floor(
+                Math.random() * announcements.length
+            )
+        ];
+
+    const announcementMessage =
+        document.getElementById(
+            "announcementMessage"
+        );
+
+    const announcementArea =
+        document.getElementById(
+            "announcementArea"
+        );
+
+    if (
+        randomAnnouncement.trim() === ""
+    ) {
+
+        announcementArea.style.display =
+            "none";
+
+    }
+    else {
+
+        announcementMessage.textContent =
+            randomAnnouncement;
+
+    }
+
+
+    /*
+     * ============================================================
+     * GAME DATA
+     * ============================================================
+     */
+
+    const games = [
+
+        {
+            name: "Ragdoll Archers",
+            image: "https://play-lh.googleusercontent.com/15zkozUZzNZXG2Hx_FdE0S9paEUGP6ufaKr_VXDK6Tl2ytLDjA7967wb561g1B39oqp30loRsHFQpIKjbO3l-A",
+            link: "https://proxysuniversity.github.io/games/ragdoll-archers.htm",
+            file: "",
+            description: "Ragdoll Archers is a physics-based, action-packed stickman archery game developed by Ericetto.",
+            hide: false,
+            justImage: true
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        },
+
+        {
+            name: "",
+            image: "",
+            link: "",
+            file: "",
+            description: "",
+            hide: true,
+            justImage: false
+        }
+
+    ];
+
+
+    /*
+     * ============================================================
+     * ELEMENTS
+     * ============================================================
+     */
+
+    const gamesList =
+        document.getElementById(
+            "gamesList"
+        );
+
+    const emptyMessage =
+        document.getElementById(
+            "emptyMessage"
+        );
+
+    let visibleGames = 0;
+
+
+    /*
+     * ============================================================
+     * URL / TEXT SAFETY HELPERS
+     * ============================================================
+     */
+
+    function escapeHTML(value) {
+
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+    }
+
+
+    function escapeAttribute(value) {
+
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+    }
+
+
+    /*
+     * ============================================================
+     * BUILD GITHUB PAGES FILE URL
+     * ============================================================
+     */
+
+    function getGameURL(game) {
+
+        if (
+            typeof game.link === "string" &&
+            game.link.trim() !== ""
+        ) {
+
+            return game.link.trim();
+
+        }
+
+        if (
+            typeof game.file === "string" &&
+            game.file.trim() !== ""
+        ) {
+
+            let cleanFile =
+                game.file.trim();
+
+            cleanFile =
+                cleanFile.replace(
+                    /^\/+/,
+                    ""
+                );
+
+            return (
+                "https://proxysuniversity.github.io/games/" +
+                cleanFile
+            );
+
+        }
+
+        return "";
+
+    }
+
+
+    /*
+     * ============================================================
+     * OPEN GAME
+     * ============================================================
+     */
+
+    function openGame(game) {
+
+        const gameURL =
+            getGameURL(game);
+
+
+        if (gameURL === "") {
+            return;
+        }
+
+
+        const gameWindow =
+            window.open(
+                "about:blank",
+                "_blank"
+            );
+
+
+        if (!gameWindow) {
+
             window.location.href =
-                "https://proxysuniversity.github.io/games";
-        });
+                gameURL;
 
-        backButton.addEventListener("click", function () {
-            window.location.href =
-                "https://proxysuniversity.github.io/games";
-        });
-    <\/script>
+            return;
 
-</body>
-</html>
-`;
+        }
 
-            newWindow.document.open();
-            newWindow.document.write(wrapperHTML);
-            newWindow.document.close();
 
-            try {
-                newWindow.focus();
-            } catch (error) {
-                /* Ignore focus restrictions */
+        const gameTitle =
+            "Proxy University Games│" +
+            (
+                game.name.trim() !== ""
+                    ? game.name.trim()
+                    : "Game"
+            );
+
+
+        gameWindow.document.open();
+
+
+        gameWindow.document.write(
+            "<!DOCTYPE html>" +
+            "<html lang='en'>" +
+
+            "<head>" +
+
+            "<meta charset='UTF-8'>" +
+
+            "<meta name='viewport' " +
+            "content='width=device-width, initial-scale=1.0'>" +
+
+            "<title>" +
+            escapeHTML(gameTitle) +
+            "</title>" +
+
+            "<style>" +
+
+            "html,body{" +
+                "margin:0;" +
+                "padding:0;" +
+                "width:100%;" +
+                "height:100%;" +
+                "overflow:hidden;" +
+                "background:#000;" +
+            "}" +
+
+            "#gameFrame{" +
+                "position:fixed;" +
+                "top:0;" +
+                "left:0;" +
+                "width:100%;" +
+                "height:100%;" +
+                "border:0;" +
+                "background:#000;" +
+            "}" +
+
+            "#proxyLogo{" +
+                "position:fixed;" +
+                "top:12px;" +
+                "right:12px;" +
+                "width:170px;" +
+                "max-width:30vw;" +
+                "height:auto;" +
+                "z-index:999999;" +
+                "cursor:pointer;" +
+                "opacity:.9;" +
+            "}" +
+
+            "#proxyLogo:hover{" +
+                "opacity:1;" +
+            "}" +
+
+            "#backButton{" +
+                "position:fixed;" +
+                "top:12px;" +
+                "left:12px;" +
+                "z-index:999999;" +
+                "background:#000;" +
+                "color:#fff;" +
+                "border:1px solid #fff;" +
+                "padding:10px 15px;" +
+                "font-family:Arial,Helvetica,sans-serif;" +
+                "font-size:14px;" +
+                "font-weight:bold;" +
+                "cursor:pointer;" +
+                "opacity:.9;" +
+            "}" +
+
+            "#backButton:hover{" +
+                "background:#fff;" +
+                "color:#000;" +
+            "}" +
+
+            "</style>" +
+
+            "</head>" +
+
+            "<body>" +
+
+            "<iframe " +
+                "id='gameFrame' " +
+                "src='" +
+                escapeAttribute(gameURL) +
+                "' " +
+                "allow='fullscreen; autoplay; gamepad' " +
+                "allowfullscreen>" +
+            "</iframe>" +
+
+            "<img " +
+                "id='proxyLogo' " +
+                "src='https://proxysuniversity.github.io/gamesarewattt.png' " +
+                "alt='Proxy University Games' " +
+                "title='Back to Proxy University Games'>" +
+
+            "<button " +
+                "id='backButton' " +
+                "type='button'>" +
+                "BACK" +
+            "</button>" +
+
+            "</body>" +
+
+            "</html>"
+        );
+
+
+        gameWindow.document.close();
+
+
+        gameWindow.document.title =
+            gameTitle;
+
+
+        const logo =
+            gameWindow.document.getElementById(
+                "proxyLogo"
+            );
+
+        const backButton =
+            gameWindow.document.getElementById(
+                "backButton"
+            );
+
+
+        logo.addEventListener(
+            "click",
+            function () {
+
+                gameWindow.location.href =
+                    "https://proxysuniversity.github.io/games";
+
             }
+        );
+
+
+        backButton.addEventListener(
+            "click",
+            function () {
+
+                gameWindow.location.href =
+                    "https://proxysuniversity.github.io/games";
+
+            }
+        );
+
+
+        gameWindow.focus();
+
+    }
+
+
+    /*
+     * ============================================================
+     * RENDER GAMES
+     * ============================================================
+     */
+
+    games.forEach(
+        function (game) {
+
+            if (game.hide === true) {
+                return;
+            }
+
+
+            if (
+                game.name.trim() === "" &&
+                game.image.trim() === "" &&
+                game.link.trim() === "" &&
+                game.file.trim() === ""
+            ) {
+
+                return;
+
+            }
+
+
+            visibleGames++;
+
+
+            const gameElement =
+                document.createElement(
+                    "div"
+                );
+
+
+            if (
+                game.justImage === true &&
+                game.image.trim() !== ""
+            ) {
+
+                gameElement.className =
+                    "just-image-game";
+
+
+                const image =
+                    document.createElement(
+                        "img"
+                    );
+
+
+                image.className =
+                    "game-image";
+
+
+                image.src =
+                    game.image;
+
+
+                image.alt =
+                    game.name;
+
+
+                gameElement.appendChild(
+                    image
+                );
+
+            }
+
+            else {
+
+                gameElement.className =
+                    "game";
+
+
+                if (
+                    game.image.trim() !== ""
+                ) {
+
+                    const image =
+                        document.createElement(
+                            "img"
+                        );
+
+
+                    image.className =
+                        "game-image";
+
+
+                    image.src =
+                        game.image;
+
+
+                    image.alt =
+                        game.name;
+
+
+                    gameElement.appendChild(
+                        image
+                    );
+
+                }
+
+
+                const info =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                info.className =
+                    "game-info";
+
+
+                if (
+                    game.name.trim() !== ""
+                ) {
+
+                    const name =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    name.className =
+                        "game-name";
+
+
+                    name.textContent =
+                        game.name;
+
+
+                    info.appendChild(
+                        name
+                    );
+
+                }
+
+
+                if (
+                    game.description.trim() !== ""
+                ) {
+
+                    const description =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    description.className =
+                        "game-description";
+
+
+                    description.textContent =
+                        game.description;
+
+
+                    info.appendChild(
+                        description
+                    );
+
+                }
+
+
+                if (
+                    game.link.trim() !== ""
+                ) {
+
+                    const linkText =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    linkText.className =
+                        "game-link";
+
+
+                    linkText.textContent =
+                        "proxy link: " +
+                        game.link;
+
+
+                    info.appendChild(
+                        linkText
+                    );
+
+                }
+
+
+                gameElement.appendChild(
+                    info
+                );
+
+            }
+
+
+            gameElement.addEventListener(
+                "click",
+                function () {
+
+                    openGame(game);
+
+                }
+            );
+
+
+            gamesList.appendChild(
+                gameElement
+            );
+
         }
+    );
 
-        function renderGames() {
-            const container = document.getElementById("games");
 
-            container.innerHTML = "";
+    /*
+     * ============================================================
+     * EMPTY GAME LIST
+     * ============================================================
+     */
 
-            games.forEach(function (game) {
-                if (game.hide) {
-                    return;
-                }
+    if (
+        visibleGames === 0
+    ) {
 
-                const gameURL = getGameURL(game);
+        emptyMessage.style.display =
+            "block";
 
-                if (!gameURL && !game.image) {
-                    return;
-                }
+    }
 
-                const gameElement = document.createElement("div");
-                gameElement.className = "game";
-
-                if (game.justImage) {
-                    gameElement.classList.add("image-only");
-
-                    if (game.image) {
-                        gameElement.innerHTML = `
-                            <img
-                                src="${escapeAttribute(game.image)}"
-                                alt="${escapeAttribute(game.name || "Game")}"
-                                draggable="false"
-                            >
-                        `;
-                    } else if (game.name) {
-                        gameElement.textContent = game.name;
-                    }
-                } else {
-                    gameElement.innerHTML = `
-                        <div class="game-content">
-                            ${
-                                game.image
-                                    ? `
-                                <img
-                                    class="game-image"
-                                    src="${escapeAttribute(game.image)}"
-                                    alt="${escapeAttribute(game.name || "Game")}"
-                                    draggable="false"
-                                >
-                            `
-                                    : ""
-                            }
-
-                            <div class="game-text">
-                                ${
-                                    game.name
-                                        ? `
-                                    <div class="game-name">
-                                        ${escapeHTML(game.name)}
-                                    </div>
-                                `
-                                        : ""
-                                }
-
-                                ${
-                                    game.description
-                                        ? `
-                                    <div class="game-description">
-                                        ${escapeHTML(game.description)}
-                                    </div>
-                                `
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    `;
-                }
-
-                if (gameURL) {
-                    gameElement.addEventListener("click", function () {
-                        openGame(game);
-                    });
-                }
-
-                container.appendChild(gameElement);
-            });
-        }
-
-        renderGames();
-    </script>
+</script>
 
 </body>
 </html>
