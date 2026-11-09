@@ -1,0 +1,436 @@
+
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+  <base href="https://cdn.jsdelivr.net/gh/bubblfan/cg-rip@main/hammer-2/">
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+    #unity-canvas { position:fixed; top:0; left:0; width:100%; height:100%; outline:none; z-index:1; }
+    #startupWatermark { --intro-text-size:clamp(20px,3vw,30px); position:fixed; inset:0; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:#000; opacity:1; pointer-events:none; }
+    #startupWatermark .watermark-title { order:2; font-family:Arial,sans-serif; font-size:var(--intro-text-size); font-weight:700; color:#fff; margin:0; text-align:center; opacity:0; transform:translateY(24px); animation:watermarkTextIn .65s ease .55s forwards; }
+    #startupWatermark .watermark-url { order:3; font-family:Arial,sans-serif; font-size:clamp(10px,1.5vw,13px); font-weight:400; color:#888; margin:0; text-align:center; overflow-wrap:anywhere; max-width:90vw; opacity:0; transform:translateY(18px); animation:watermarkTextIn .65s ease .75s forwards; }
+    #startupWatermark a { order:1; display:block; pointer-events:auto; cursor:pointer; z-index:2; line-height:0; }
+    #startupWatermark img { order:1; display:block; width:auto; height:auto; max-width:none; max-height:none; object-fit:contain; opacity:1; visibility:visible; transform:translateY(-100vh); animation:watermarkSlideDown .9s cubic-bezier(.22,.8,.25,1) forwards; }
+    #startupWatermark.leaving img { animation:watermarkSlideUp .75s cubic-bezier(.55,.05,.8,.4) forwards; }
+    #startupWatermark.leaving .watermark-title, #startupWatermark.leaving .watermark-url { animation:watermarkTextOut .75s cubic-bezier(.55,.05,.8,.4) forwards; }
+    #startupWatermark.leaving { animation:watermarkBackgroundOut .75s ease forwards; }
+    @keyframes watermarkSlideDown { from { transform:translateY(-100vh); } to { transform:translateY(0); } }
+    @keyframes watermarkSlideUp { from { transform:translateY(0); } to { transform:translateY(-110vh); } }
+    @keyframes watermarkTextIn { to { opacity:1; transform:translateY(0); } }
+    @keyframes watermarkTextOut { from { opacity:1; transform:translateY(0); } to { opacity:1; transform:translateY(-110vh); } }
+    @keyframes watermarkBackgroundOut { to { opacity:0; visibility:hidden; } }
+
+    #h2-tools { position:fixed; top:14px; right:14px; z-index:10010; font:14px Arial,sans-serif; color:#fff; }
+    #h2-tools button, #h2-tools select, #h2-tools input { font:inherit; }
+    #h2-tools-toggle { border:1px solid #52645a; border-radius:7px; padding:10px 14px; color:#fff; background:rgba(15,22,18,.94); cursor:pointer; }
+    #h2-tools-panel { display:none; width:min(310px, calc(100vw - 28px)); max-height:calc(100vh - 82px); overflow:auto; margin-top:8px; padding:15px; box-sizing:border-box; border:1px solid #52645a; border-radius:10px; background:rgba(10,15,12,.97); box-shadow:0 12px 35px #0009; }
+    #h2-tools-panel.open { display:block; }
+    #h2-tools-panel h2 { margin:0 0 13px; font-size:17px; }
+    .h2-setting { margin:0 0 14px; }
+    .h2-setting label { display:block; margin-bottom:6px; color:#d8e2da; font-weight:600; }
+    .h2-setting input[type=url] { box-sizing:border-box; width:100%; padding:9px; color:#fff; background:#202a23; border:1px solid #52645a; border-radius:5px; }
+    .h2-setting input[type=file] { width:100%; color:#cbd5ce; font-size:12px; }
+    .h2-actions { display:flex; flex-wrap:wrap; gap:7px; }
+    .h2-actions button { border:1px solid #52645a; border-radius:5px; padding:8px 10px; color:#fff; background:#26362b; cursor:pointer; }
+    .h2-actions button:hover, #h2-tools-toggle:hover { background:#38513f; }
+    #h2-fps { position:fixed; top:16px; left:16px; z-index:10005; padding:6px 9px; border-radius:5px; color:#8dff9d; background:#000a; font:bold 13px monospace; pointer-events:none; }
+    #h2-crosshair { position:fixed; left:50%; top:50%; z-index:10004; width:32px; height:32px; object-fit:contain; transform:translate(-50%,-50%); pointer-events:none; display:none; }
+    #h2-crosshair.hidden { display:none !important; }
+    @media (max-width:520px) { #h2-tools { top:8px; right:8px; } #h2-fps { top:10px; left:10px; } }
+  </style>
+</head>
+<body class="noselect">
+  <div id="startupWatermark" aria-hidden="true">
+    <a id="watermarkLogoLink" href="https://proxysuniversity.github.io/aaron-carters-arcade/?utm_source=hammer-2-reloaded-HTML5" target="_blank" rel="noopener noreferrer" aria-label="Visit the website ig bro...?">
+      <img id="watermarkLogo" src="data:image/webp;base64,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" alt="">
+    </a>
+    <p class="watermark-title">We make proxy's better.</p>
+    <p class="watermark-url">https://proxysuniversity.github.io/aaron-carters-arcade/</p>
+  </div>
+
+  <div id="loading-text" style="color:black;font-size:48px;font-family:cursive;text-align:center;margin-top:20px;">LOADING...</div>
+  <canvas id="unity-canvas"></canvas>
+
+  <div id="h2-fps" hidden>FPS: --</div>
+  <img id="h2-crosshair" alt="Custom crosshair" draggable="false">
+
+  <div id="h2-tools">
+    <button id="h2-tools-toggle" type="button" aria-expanded="false">spice up ur game!</button>
+    <section id="h2-tools-panel" aria-label="Hammer 2 Reloaded settings">
+      <h2>spice up ur game!</h2>
+
+      <div class="h2-setting">
+        <label for="h2-fps-toggle">FPS counter</label>
+        <div class="h2-actions">
+          <button id="h2-fps-toggle" type="button">Show FPS</button>
+        </div>
+      </div>
+
+      <div class="h2-setting">
+        <label for="h2-crosshair-file">Custom crosshair image</label>
+        <input id="h2-crosshair-file" type="file" accept="image/*">
+      </div>
+
+      <div class="h2-setting">
+        <label for="h2-crosshair-url">Or paste an image URL</label>
+        <input id="h2-crosshair-url" type="url" placeholder="https://example.com/crosshair.png">
+        <div class="h2-actions" style="margin-top:7px">
+          <button id="h2-crosshair-apply" type="button">Apply image</button>
+          <button id="h2-crosshair-clear-url" type="button">Clear URL Field</button>
+          <button id="h2-crosshair-hide" type="button">Hide</button>
+          <button id="h2-crosshair-show" type="button">Show</button>
+        </div>
+      </div>
+
+      <div class="h2-actions">
+        <button id="h2-tools-close" type="button">Close</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const introLogo = document.getElementById("watermarkLogo");
+    const introTitle = document.querySelector("#startupWatermark .watermark-title");
+
+    function sizeIntroLogo() {
+      if (!introLogo || !introTitle || !introLogo.naturalWidth) return;
+      const titleWidth = introTitle.getBoundingClientRect().width;
+      introLogo.style.width = (titleWidth * 1.1) + "px";
+      introLogo.style.height = "auto";
+    }
+
+    if (introLogo) {
+      introLogo.addEventListener("load", sizeIntroLogo);
+      if (introLogo.complete) sizeIntroLogo();
+    }
+
+    if (introTitle && "ResizeObserver" in window) {
+      new ResizeObserver(sizeIntroLogo).observe(introTitle);
+    }
+
+    document.fonts?.ready.then(sizeIntroLogo);
+    window.addEventListener("resize", sizeIntroLogo);
+
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const panel = $("h2-tools-panel");
+      const toggle = $("h2-tools-toggle");
+      const fpsDisplay = $("h2-fps");
+      const crosshair = $("h2-crosshair");
+      const fpsToggle = $("h2-fps-toggle");
+      const fileInput = $("h2-crosshair-file");
+      const urlInput = $("h2-crosshair-url");
+
+      let fpsVisible = false;
+      let frameCount = 0;
+      let lastFpsUpdate = performance.now();
+
+      function openPanel(open) {
+        panel.classList.toggle("open", open);
+        toggle.setAttribute("aria-expanded", String(open));
+      }
+
+      toggle.addEventListener("click", () => {
+        openPanel(!panel.classList.contains("open"));
+      });
+
+      $("h2-tools-close").addEventListener("click", () => openPanel(false));
+
+      function setFpsVisible(show) {
+        fpsVisible = show;
+        fpsDisplay.hidden = !show;
+        fpsToggle.textContent = show ? "Hide FPS" : "Show FPS";
+      }
+
+      fpsToggle.addEventListener("click", () => setFpsVisible(!fpsVisible));
+
+      function countFrames(now) {
+        frameCount++;
+
+        if (now - lastFpsUpdate >= 500) {
+          const fps = Math.round(frameCount * 1000 / (now - lastFpsUpdate));
+          fpsDisplay.textContent = "FPS: " + fps;
+          frameCount = 0;
+          lastFpsUpdate = now;
+        }
+
+        requestAnimationFrame(countFrames);
+      }
+
+      requestAnimationFrame(countFrames);
+
+      function showCrosshair(src) {
+        if (!src) return;
+
+        const test = new Image();
+
+        test.onload = () => {
+          crosshair.src = src;
+          crosshair.classList.remove("hidden");
+          crosshair.style.display = "block";
+
+          try {
+            localStorage.setItem("h2-crosshair-image", src);
+          } catch (e) {
+            console.warn("Crosshair image too large to save between visits.");
+          }
+        };
+
+        test.onerror = () => alert("That image could not be loaded. Try another image or URL.");
+        test.src = src;
+      }
+
+      const savedCrosshair = localStorage.getItem("h2-crosshair-image");
+      if (savedCrosshair) showCrosshair(savedCrosshair);
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith("image/")) {
+          alert("Please choose an image file.");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => showCrosshair(reader.result);
+        reader.readAsDataURL(file);
+      });
+
+      $("h2-crosshair-apply").addEventListener("click", () => {
+        const url = urlInput.value.trim();
+
+        if (url) {
+          showCrosshair(url);
+        } else if (fileInput.files && fileInput.files[0]) {
+          fileInput.dispatchEvent(new Event("change"));
+        } else {
+          alert("Upload an image or paste an image URL first.");
+        }
+      });
+
+      $("h2-crosshair-clear-url").addEventListener("click", () => {
+        urlInput.value = "";
+        urlInput.focus();
+      });
+
+      $("h2-crosshair-hide").addEventListener("click", () => {
+        crosshair.classList.add("hidden");
+        crosshair.style.display = "none";
+      });
+
+      $("h2-crosshair-show").addEventListener("click", () => {
+        if (crosshair.src) {
+          crosshair.classList.remove("hidden");
+          crosshair.style.display = "block";
+        } else {
+          alert("Upload an image or paste an image URL first.");
+        }
+      });
+    })();
+
+    const SPLIT_MAP = {
+      "29e3d3c8908bb566507cd8b1b3560e15.data": null,
+      "0c2c310b28788b93284ef8d4d4fc6791.wasm": null,
+      "01288fb2e5f57e194e52e16f7bed4cd4.framework.js": null
+    };
+
+    function mimeFor(url) {
+      if (url.includes(".wasm")) return "application/wasm";
+      if (url.includes(".js")) return "text/javascript";
+      return "application/octet-stream";
+    }
+
+    async function resolveFile(baseUrl) {
+      try {
+        const zipUrl = baseUrl + ".zip";
+        const zipHead = await fetch(zipUrl, { method: "HEAD" });
+
+        if (zipHead.ok) {
+          const res = await fetch(zipUrl);
+          const zip = await JSZip.loadAsync(await res.arrayBuffer());
+          const entry = Object.values(zip.files).find(f => !f.dir);
+          const data = await entry.async("arraybuffer");
+          return URL.createObjectURL(new Blob([data], { type: mimeFor(baseUrl) }));
+        }
+      } catch (e) {}
+
+      try {
+        const firstPart = baseUrl + ".zip.part1";
+        const firstHead = await fetch(firstPart, { method: "HEAD" });
+
+        if (firstHead.ok) {
+          const parts = [firstPart];
+
+          for (let i = 2; i <= 99; i++) {
+            const partUrl = baseUrl + ".zip.part" + i;
+            const h = await fetch(partUrl, { method: "HEAD" });
+            if (!h.ok) break;
+            parts.push(partUrl);
+          }
+
+          const buffers = await Promise.all(parts.map(async (u) => {
+            const r = await fetch(u);
+            if (!r.ok) throw new Error("Failed part " + u);
+            return new Uint8Array(await r.arrayBuffer());
+          }));
+
+          const total = buffers.reduce((a, b) => a + b.length, 0);
+          const merged = new Uint8Array(total);
+          let offset = 0;
+
+          for (const b of buffers) {
+            merged.set(b, offset);
+            offset += b.length;
+          }
+
+          const zip = await JSZip.loadAsync(merged.buffer);
+          const entry = Object.values(zip.files).find(f => !f.dir);
+          const data = await entry.async("arraybuffer");
+          return URL.createObjectURL(new Blob([data], { type: mimeFor(baseUrl) }));
+        }
+      } catch (e) {}
+
+      const parts = [];
+
+      for (let i = 1; i <= 99; i++) {
+        const testUrl = baseUrl + ".part" + i;
+
+        try {
+          const head = await fetch(testUrl, { method: "HEAD" });
+          if (!head.ok) break;
+          parts.push(testUrl);
+        } catch {
+          break;
+        }
+      }
+
+      if (parts.length === 0) return baseUrl;
+
+      const buffers = await Promise.all(parts.map(async (u) => {
+        const r = await fetch(u);
+        if (!r.ok) throw new Error("Failed part " + u);
+        return new Uint8Array(await r.arrayBuffer());
+      }));
+
+      const total = buffers.reduce((a, b) => a + b.length, 0);
+      const merged = new Uint8Array(total);
+      let offset = 0;
+
+      for (const b of buffers) {
+        merged.set(b, offset);
+        offset += b.length;
+      }
+
+      return URL.createObjectURL(new Blob([merged]));
+    }
+
+    async function preMergeAll() {
+      const map = {};
+      const files = Object.entries(SPLIT_MAP);
+      const total = files.length;
+      let done = 0;
+      const loadingText = document.getElementById("loading-text");
+
+      for (const [file] of files) {
+        const resolved = await resolveFile("Build/" + file);
+        map[file] = resolved;
+        done++;
+        loadingText.innerText = `LOADING... ${Math.floor((done / total) * 100)}%`;
+        console.log("Resolved:", file, "→", resolved);
+      }
+
+      loadingText.style.display = "none";
+      return map;
+    }
+
+    (async () => {
+      const mergedMap = await preMergeAll();
+      window.SPLIT_MAP = mergedMap;
+
+      const origFetch = window.fetch;
+
+      window.fetch = async function(resource, options) {
+        if (typeof resource === "string") {
+          const key = resource.split("/").pop();
+
+          if (mergedMap[key]) return origFetch(mergedMap[key], options);
+
+          if (resource.includes("StreamingAssets")) {
+            return origFetch(
+              document.querySelector("base").href +
+              "/StreamingAssets/" +
+              resource.split("/StreamingAssets/")[1]
+            );
+          }
+        }
+
+        return origFetch(resource, options);
+      };
+
+      const OrigXHR = window.XMLHttpRequest;
+
+      window.XMLHttpRequest = function() {
+        const xhr = new OrigXHR();
+        const origOpen = xhr.open;
+
+        xhr.open = function(method, url, ...rest) {
+          const key = url.split("/").pop();
+          origOpen.call(xhr, method, mergedMap[key] || url, ...rest);
+        };
+
+        return xhr;
+      };
+
+      const canvas = document.querySelector("#unity-canvas");
+      const loaderUrl = "Build/Build.loader.js";
+
+      const config = {
+        dataUrl: mergedMap["29e3d3c8908bb566507cd8b1b3560e15.data"],
+        frameworkUrl: mergedMap["01288fb2e5f57e194e52e16f7bed4cd4.framework.js"],
+        codeUrl: mergedMap["0c2c310b28788b93284ef8d4d4fc6791.wasm"],
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "Hammer 2",
+        productName: "Hammer 2",
+        productVersion: "1.0.0"
+      };
+
+      const script = document.createElement("script");
+      script.src = loaderUrl;
+
+      script.onload = () => {
+        createUnityInstance(canvas, config, () => {}).then((unityInstance) => {
+          window.gameInstance = unityInstance;
+
+          const watermark = document.getElementById("startupWatermark");
+
+          if (watermark) {
+            watermark.classList.add("leaving");
+
+            window.setTimeout(() => {
+              if (watermark.parentNode) watermark.parentNode.removeChild(watermark);
+            }, 800);
+          }
+        }).catch((message) => alert(message));
+      };
+
+      document.body.appendChild(script);
+    })();
+
+    function resizeCanvas() {
+      const canvas = document.getElementById("unity-canvas");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
+    }
+
+    window.addEventListener("load", resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
+  </script>
+</body>
+</html>
