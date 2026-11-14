@@ -1,0 +1,2950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Don't Splash — 3D Poolrooms Survival Horror</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #010304;
+            font-family: 'Courier Prime', monospace;
+            color: #d6e4e5;
+        }
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+        .font-horror {
+            font-family: 'Oswald', sans-serif;
+            letter-spacing: 0.14em;
+        }
+        /* Subtle analog lens vignette */
+        .analog-vignette {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            background: radial-gradient(circle at center, transparent 52%, rgba(0, 0, 0, 0.88) 100%);
+        }
+        /* Split screen subtle divider line */
+        .split-divider {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: rgba(180, 210, 215, 0.18);
+            z-index: 12;
+            pointer-events: none;
+        }
+        /* Round start title fade-in and fade-out after 2s */
+        #round-banner {
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.45s ease-in-out;
+        }
+        #round-banner.visible {
+            opacity: 1;
+        }
+        /* Loading screen black fade-in and fade-out */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background-color: #000000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.65s ease-in-out;
+            pointer-events: all;
+        }
+        #loading-screen.hidden-screen {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #loading-img-wrapper {
+            opacity: 0;
+            transition: opacity 0.75s ease-in-out;
+            pointer-events: none;
+        }
+        #loading-img-wrapper.fade-in {
+            opacity: 1;
+        }
+        #loading-img {
+            pointer-events: none;
+            -webkit-user-drag: none;
+            user-select: none;
+        }
+        /* Jump scare violent strobe animation */
+        @keyframes scareStrobe {
+            0%   { transform: scale(1.05) translate(0px, 0px) rotate(0deg); filter: contrast(1.9) brightness(1.1) saturate(1.4); }
+            15%  { transform: scale(1.22) translate(-18px, 12px) rotate(-2deg); filter: contrast(2.4) brightness(0.75) invert(0.12); }
+            30%  { transform: scale(1.15) translate(20px, -14px) rotate(2.5deg); filter: contrast(2.1) brightness(1.3); }
+            45%  { transform: scale(1.28) translate(-12px, -16px) rotate(-1.5deg); filter: contrast(2.6) brightness(0.6); }
+            60%  { transform: scale(1.18) translate(16px, 10px) rotate(2deg); filter: contrast(2.2) brightness(1.25); }
+            75%  { transform: scale(1.30) translate(-14px, 8px) rotate(-2.5deg); filter: contrast(2.5) brightness(0.8); }
+            100% { transform: scale(1.12) translate(0px, 0px) rotate(0deg); filter: contrast(2.0) brightness(1.0); }
+        }
+        .scare-active {
+            animation: scareStrobe 0.14s infinite;
+        }
+        .btn-horror {
+            background: rgba(8, 14, 16, 0.85);
+            border: 1px solid rgba(180, 210, 215, 0.28);
+            transition: all 0.16s ease;
+        }
+        .btn-horror:hover {
+            background: rgba(120, 18, 18, 0.45);
+            border-color: rgba(239, 68, 68, 0.85);
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(220, 38, 38, 0.35);
+        }
+        /* Custom scrollbar for keybinds modal */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #050809; }
+        ::-webkit-scrollbar-thumb { background: #263538; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <!-- 3D WebGL Viewport -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Subtle Lens Vignette (No Game UI HUD) -->
+    <div class="analog-vignette"></div>
+    <div id="split-divider" class="split-divider hidden"></div>
+
+    <!-- Loading Screen Overlay (Starts Black -> Image Fades In -> Image Fades Out to Black -> Reveals Game) -->
+    <div id="loading-screen" oncontextmenu="return false;">
+        <div id="loading-img-wrapper" class="flex flex-col items-center justify-center max-w-2xl w-full px-6">
+            <img id="loading-img" src="" alt="" draggable="false" oncontextmenu="return false;" class="w-full max-h-[65vh] object-contain rounded-lg shadow-[0_0_60px_rgba(0,0,0,0.95)]" />
+        </div>
+    </div>
+
+    <!-- 2-Second Fading Round Start Title (Only text that appears in-game) -->
+    <div id="round-banner" class="fixed inset-x-0 top-14 z-20 flex flex-col items-center justify-center text-center px-4">
+        <div id="round-banner-title" class="font-horror text-3xl sm:text-5xl text-slate-100 tracking-[0.28em] uppercase drop-shadow-[0_4px_20px_rgba(0,0,0,0.95)]">
+            ROOM 01 — THE SHALLOW BASIN
+        </div>
+        <div id="round-banner-sub" class="text-xs sm:text-sm text-red-500/90 tracking-[0.35em] uppercase mt-2 drop-shadow-[0_2px_10px_rgba(0,0,0,1)]">
+            DON'T TOUCH THE WATER
+        </div>
+    </div>
+
+    <!-- Full-Screen Image Jump Scare Overlay -->
+    <div id="jumpscare-overlay" class="fixed inset-0 z-50 bg-black hidden flex items-center justify-center overflow-hidden">
+        <img id="jumpscare-img" src="" alt="" class="w-full h-full object-cover scare-active" />
+        <div class="absolute inset-0 bg-red-950/35 mix-blend-multiply pointer-events-none"></div>
+    </div>
+
+    <!-- Title / Mode Selection Screen (Transparent background showing live orbiting Poolrooms map) -->
+    <div id="menu-overlay" class="fixed inset-0 z-30 flex items-center justify-center p-4">
+        <div class="max-w-xl w-full p-6 sm:p-10 text-center flex flex-col items-center">
+            <img id="game-logo-img" src="https://cdn-0001.qstv.on.epicgames.com/hgIAokQtMWztMeTlqS/image/logo_s.png" alt="DON'T SPLASH" draggable="false" oncontextmenu="return false;" class="w-full max-w-md max-h-48 sm:max-h-56 object-contain mb-10 drop-shadow-[0_10px_35px_rgba(0,0,0,0.95)] pointer-events-none select-none" />
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md mb-4">
+                <button id="btn-solo" class="btn-horror p-4 rounded-lg text-center cursor-pointer backdrop-blur-sm">
+                    <div class="font-horror text-xl text-white">SOLO</div>
+                </button>
+                <button id="btn-coop" class="btn-horror p-4 rounded-lg text-center cursor-pointer backdrop-blur-sm">
+                    <div class="font-horror text-xl text-white">2P SPLIT-SCREEN</div>
+                </button>
+            </div>
+
+            <button id="btn-open-keybinds" class="btn-horror w-full max-w-md py-3 px-4 rounded-lg text-xs text-slate-300 tracking-[0.22em] uppercase cursor-pointer backdrop-blur-sm">
+                CONTROLS / KEYBINDS
+            </button>
+        </div>
+    </div>
+
+    <!-- Keybinds Customization Modal -->
+    <div id="keybinds-overlay" class="fixed inset-0 z-40 bg-black/95 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="max-w-3xl w-full border border-slate-800 bg-neutral-950 p-6 sm:p-8 rounded-xl shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                <div>
+                    <h2 class="font-horror text-2xl sm:text-3xl text-white">CUSTOMIZE KEYBINDS</h2>
+                    <p class="text-xs text-slate-400 mt-1">Click any action button, then press the desired key on your keyboard.</p>
+                </div>
+                <button id="btn-reset-keybinds" class="text-xs text-red-400 hover:text-red-300 border border-red-900/60 px-3 py-1.5 rounded cursor-pointer">
+                    RESET DEFAULTS
+                </button>
+            </div>
+
+            <div id="keybinds-list" class="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto pr-1 flex-1">
+                <!-- Populated dynamically by JS -->
+            </div>
+
+            <div class="border-t border-slate-800 pt-4 mt-4 flex justify-end">
+                <button id="btn-close-keybinds" class="btn-horror px-8 py-2.5 rounded-lg font-horror text-lg text-white cursor-pointer">
+                    SAVE &amp; CLOSE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pause / Resume Overlay (ESC) -->
+    <div id="pause-overlay" class="fixed inset-0 z-30 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="max-w-md w-full border border-slate-800/80 bg-neutral-950/95 p-8 rounded-xl text-center">
+            <h2 class="font-horror text-3xl text-white mb-6">PAUSED</h2>
+            <div class="flex flex-col gap-3">
+                <button id="btn-resume" class="btn-horror py-3 px-6 rounded-lg font-horror text-lg text-white cursor-pointer">
+                    RESUME
+                </button>
+                <button id="btn-pause-keybinds" class="btn-horror py-3 px-6 rounded-lg text-xs text-slate-300 tracking-[0.2em] uppercase cursor-pointer">
+                    CONTROLS / KEYBINDS
+                </button>
+                <button id="btn-quit-menu" class="btn-horror py-3 px-6 rounded-lg text-xs text-red-400 tracking-[0.2em] uppercase cursor-pointer">
+                    EXIT TO TITLE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ============================================================================
+    // DON'T SPLASH — 3D Poolrooms Survival Horror (Optimized 60 FPS Engine)
+    // ============================================================================
+
+    // ----------------------------------------------------------------------------
+    // 0. CODE-ONLY LOADING SCREEN IMAGE URL (Locked in-game; change directly here)
+    // ----------------------------------------------------------------------------
+    const LOADING_SCREEN_IMAGE_URL = "https://proxysuniversity.github.io/aaron-carters-arcade/Made%20for.png";
+
+    // Block right-click save/inspect context menu globally so image URLs cannot be copied or saved
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('dragstart', (e) => e.preventDefault());
+
+    // ----------------------------------------------------------------------------
+    // 1. CUSTOMIZABLE KEYBINDS CONFIGURATION
+    // ----------------------------------------------------------------------------
+    const DEFAULT_KEYBINDS = {
+        p1: {
+            forward: 'KeyW',
+            backward: 'KeyS',
+            left: 'KeyA',
+            right: 'KeyD',
+            jump: 'Space',
+            sprint: 'ShiftLeft',
+            interact: 'KeyE',
+            throwItem: 'KeyF',
+            flashlight: 'KeyT'
+        },
+        p2: {
+            forward: 'ArrowUp',
+            backward: 'ArrowDown',
+            left: 'ArrowLeft',
+            right: 'ArrowRight',
+            jump: 'Enter',
+            sprint: 'ShiftRight',
+            interact: 'KeyO',
+            throwItem: 'KeyP',
+            flashlight: 'KeyL'
+        }
+    };
+
+    const ACTION_LABELS = {
+        forward: 'Move Forward',
+        backward: 'Move Backward',
+        left: 'Strafe Left',
+        right: 'Strafe Right',
+        jump: 'Jump',
+        sprint: 'Sprint',
+        interact: 'Grab Item / Hold Revive',
+        throwItem: 'Throw Distraction',
+        flashlight: 'Toggle Flashlight'
+    };
+
+    let keybinds = JSON.parse(JSON.stringify(DEFAULT_KEYBINDS));
+    try {
+        const savedBinds = localStorage.getItem('dont_splash_keybinds_v1');
+        if (savedBinds) {
+            const parsed = JSON.parse(savedBinds);
+            if (parsed.p1 && parsed.p2) {
+                keybinds = {
+                    p1: { ...DEFAULT_KEYBINDS.p1, ...parsed.p1 },
+                    p2: { ...DEFAULT_KEYBINDS.p2, ...parsed.p2 }
+                };
+            }
+        }
+    } catch (e) {}
+
+    function saveKeybinds() {
+        try {
+            localStorage.setItem('dont_splash_keybinds_v1', JSON.stringify(keybinds));
+        } catch (e) {}
+    }
+
+    function formatKeyCode(code) {
+        if (!code) return 'NONE';
+        if (code.startsWith('Key')) return code.slice(3);
+        if (code.startsWith('Digit')) return code.slice(5);
+        if (code === 'Space') return 'SPACE';
+        if (code === 'ShiftLeft') return 'L-SHIFT';
+        if (code === 'ShiftRight') return 'R-SHIFT';
+        if (code === 'ControlLeft') return 'L-CTRL';
+        if (code === 'ControlRight') return 'R-CTRL';
+        if (code === 'ArrowUp') return 'UP ARROW';
+        if (code === 'ArrowDown') return 'DOWN ARROW';
+        if (code === 'ArrowLeft') return 'LEFT ARROW';
+        if (code === 'ArrowRight') return 'RIGHT ARROW';
+        return code.toUpperCase();
+    }
+
+    // ----------------------------------------------------------------------------
+    // 2. JUMP SCARE HORROR IMAGE URLS + PROCEDURAL FALLBACK
+    // ----------------------------------------------------------------------------
+    const JUMPSCARE_IMAGE_URLS = [
+        "https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=1400&q=85",
+        "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1400&q=85",
+        "https://images.unsplash.com/photo-1604076913837-52ab5629fba9?auto=format&fit=crop&w=1400&q=85"
+    ];
+
+    function buildProceduralHorrorScareURL() {
+        const c = document.createElement('canvas');
+        c.width = 1024;
+        c.height = 768;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#020202';
+        ctx.fillRect(0, 0, c.width, c.height);
+
+        const grad = ctx.createRadialGradient(512, 360, 40, 512, 384, 460);
+        grad.addColorStop(0, '#5a6362');
+        grad.addColorStop(0.55, '#1d2222');
+        grad.addColorStop(1, '#000000');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(512, 380, 250, 340, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.ellipse(415, 305, 58, 44, -0.18, 0, Math.PI * 2);
+        ctx.ellipse(609, 305, 58, 44, 0.18, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ff1a1a';
+        ctx.beginPath();
+        ctx.arc(418, 305, 7, 0, Math.PI * 2);
+        ctx.arc(606, 305, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#050000';
+        ctx.beginPath();
+        ctx.ellipse(512, 520, 95, 145, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#d4d0c8';
+        for (let i = -75; i <= 75; i += 18) {
+            ctx.beginPath();
+            ctx.moveTo(512 + i - 5, 382);
+            ctx.lineTo(512 + i + 5, 382);
+            ctx.lineTo(512 + i, 432 + Math.abs(i) * 0.25);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(512 + i - 5, 658);
+            ctx.lineTo(512 + i + 5, 658);
+            ctx.lineTo(512 + i, 608 - Math.abs(i) * 0.25);
+            ctx.fill();
+        }
+        return c.toDataURL('image/png');
+    }
+
+    const FALLBACK_SCARE_DATA_URL = buildProceduralHorrorScareURL();
+    const preloadedScareImages = [];
+    JUMPSCARE_IMAGE_URLS.forEach((url) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => preloadedScareImages.push(url);
+        img.src = url;
+    });
+
+    // ----------------------------------------------------------------------------
+    // 3. PROCEDURAL HORROR AUDIO ENGINE (Scary BG Music, Flicker Buzz, Sonar Clicks)
+    // ----------------------------------------------------------------------------
+    class SoundEngine {
+        constructor() {
+            this.ctx = null;
+            this.ambienceStarted = false;
+            this.lastHeartbeat = 0;
+            this.musicMaster = null;
+            this.tensionGain = null;
+        }
+
+        init() {
+            if (!this.ctx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+            }
+            if (this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+            if (!this.ambienceStarted) {
+                this.ambienceStarted = true;
+                this.startSubterraneanAmbience();
+                this.startHorrorBackgroundMusic();
+            }
+        }
+
+        // Scary Horror Background Music: eerie detuned string/organ drones, tension riser, & haunted minor-second piano
+        startHorrorBackgroundMusic() {
+            if (!this.ctx) return;
+            try {
+                this.musicMaster = this.ctx.createGain();
+                this.musicMaster.gain.value = 0.14;
+                this.musicMaster.connect(this.ctx.destination);
+
+                // Dark dissonant drone choir (D1, Ab1 tritone, Eb2 minor second)
+                const padFreqs = [36.71, 51.91, 77.78];
+                padFreqs.forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const filter = this.ctx.createBiquadFilter();
+                    const g = this.ctx.createGain();
+
+                    osc.type = idx === 2 ? 'triangle' : 'sawtooth';
+                    osc.frequency.value = f;
+                    osc.detune.value = (idx - 1) * 12;
+
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 185;
+
+                    g.gain.value = idx === 2 ? 0.28 : 0.44;
+                    osc.connect(filter);
+                    filter.connect(g);
+                    g.connect(this.musicMaster);
+                    osc.start();
+                });
+
+                // Tension dissonant tremolo layer that swells when monster hunts
+                this.tensionGain = this.ctx.createGain();
+                this.tensionGain.gain.value = 0.02;
+                this.tensionGain.connect(this.musicMaster);
+
+                [110.0, 116.54, 155.56].forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const lpf = this.ctx.createBiquadFilter();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = f;
+                    osc.detune.value = idx * 7;
+                    lpf.type = 'lowpass';
+                    lpf.frequency.value = 340;
+                    osc.connect(lpf);
+                    lpf.connect(this.tensionGain);
+                    osc.start();
+                });
+
+                // Sparse haunted horror piano notes (minor 2nd & tritone intervals)
+                const scale = [293.66, 311.13, 415.30, 440.00, 587.33, 622.25, 277.18, 207.65];
+                let step = 0;
+                const playPianoNote = () => {
+                    if (this.ctx && this.ctx.state === 'running') {
+                        const now = this.ctx.currentTime;
+                        const note = scale[(step + Math.floor(Math.random() * 2)) % scale.length];
+                        step++;
+
+                        const osc = this.ctx.createOscillator();
+                        const sub = this.ctx.createOscillator();
+                        const env = this.ctx.createGain();
+                        const lpf = this.ctx.createBiquadFilter();
+
+                        osc.type = 'sine';
+                        sub.type = 'triangle';
+                        osc.frequency.setValueAtTime(note, now);
+                        sub.frequency.setValueAtTime(note * 0.5, now);
+
+                        lpf.type = 'lowpass';
+                        lpf.frequency.setValueAtTime(1050, now);
+                        lpf.frequency.exponentialRampToValueAtTime(210, now + 2.7);
+
+                        env.gain.setValueAtTime(0.0005, now);
+                        env.gain.linearRampToValueAtTime(0.34, now + 0.05);
+                        env.gain.exponentialRampToValueAtTime(0.0005, now + 2.9);
+
+                        osc.connect(lpf);
+                        sub.connect(lpf);
+                        lpf.connect(env);
+                        env.connect(this.musicMaster);
+
+                        osc.start(now);
+                        sub.start(now);
+                        osc.stop(now + 3.0);
+                        sub.stop(now + 3.0);
+                    }
+                    setTimeout(playPianoNote, 2100 + Math.random() * 900);
+                };
+                playPianoNote();
+            } catch (e) {}
+        }
+
+        setMusicTension(level) {
+            if (!this.ctx || !this.tensionGain) return;
+            const target = 0.02 + Math.max(0, Math.min(1, level)) * 0.32;
+            this.tensionGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.25);
+        }
+
+        startSubterraneanAmbience() {
+            if (!this.ctx) return;
+            try {
+                const osc = this.ctx.createOscillator();
+                const filter = this.ctx.createBiquadFilter();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = 34;
+                filter.type = 'lowpass';
+                filter.frequency.value = 72;
+                gain.gain.value = 0.055;
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+
+                const hum = this.ctx.createOscillator();
+                const humGain = this.ctx.createGain();
+                hum.type = 'sine';
+                hum.frequency.value = 120;
+                humGain.gain.value = 0.015;
+                hum.connect(humGain);
+                humGain.connect(this.ctx.destination);
+                hum.start();
+            } catch (e) {}
+        }
+
+        playLightBuzz() {
+            if (!this.ctx || this.ctx.state !== 'running') return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(120 + Math.random() * 40, now);
+            gain.gain.setValueAtTime(0.03, now);
+            gain.gain.exponentialRampToValueAtTime(0.0005, now + 0.08);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.085);
+        }
+
+        playSplash(intensity = 1.0) {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const duration = 0.55 * Math.min(1.4, Math.max(0.45, intensity));
+            const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.24));
+            }
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(340, now);
+            filter.frequency.exponentialRampToValueAtTime(1200, now + 0.14);
+            filter.Q.value = 1.5;
+
+            const gain = this.ctx.createGain();
+            gain.gain.setValueAtTime(0.32 * intensity, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.ctx.destination);
+            noise.start(now);
+        }
+
+        playMonsterRoar() {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const osc1 = this.ctx.createOscillator();
+            const osc2 = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            const filter = this.ctx.createBiquadFilter();
+
+            osc1.type = 'sawtooth';
+            osc2.type = 'triangle';
+            osc1.frequency.setValueAtTime(115, now);
+            osc1.frequency.exponentialRampToValueAtTime(36, now + 0.9);
+            osc2.frequency.setValueAtTime(84, now);
+            osc2.frequency.exponentialRampToValueAtTime(28, now + 0.9);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(480, now);
+            filter.frequency.exponentialRampToValueAtTime(110, now + 0.9);
+
+            gain.gain.setValueAtTime(0.01, now);
+            gain.gain.linearRampToValueAtTime(0.38, now + 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+
+            osc1.connect(filter);
+            osc2.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc1.start(now);
+            osc2.start(now);
+            osc1.stop(now + 0.96);
+            osc2.stop(now + 0.96);
+        }
+
+        playJumpScareShriek() {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const freqs = [520, 745, 1110, 1480];
+            freqs.forEach((f, idx) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = idx % 2 === 0 ? 'sawtooth' : 'square';
+                osc.frequency.setValueAtTime(f, now);
+                osc.frequency.exponentialRampToValueAtTime(f * 0.35, now + 1.15);
+
+                gain.gain.setValueAtTime(0.24, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 1.22);
+            });
+        }
+
+        playMonsterClick() {
+            if (!this.ctx || this.ctx.state !== 'running') return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(180 + Math.random() * 90, now);
+            osc.frequency.exponentialRampToValueAtTime(65, now + 0.045);
+            gain.gain.setValueAtTime(0.06, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.055);
+        }
+
+        playDuckSqueak() {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(760, now);
+            osc.frequency.exponentialRampToValueAtTime(1280, now + 0.07);
+            osc.frequency.exponentialRampToValueAtTime(640, now + 0.16);
+            gain.gain.setValueAtTime(0.18, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.19);
+        }
+
+        playFootstep() {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(135, now);
+            osc.frequency.exponentialRampToValueAtTime(42, now + 0.06);
+            gain.gain.setValueAtTime(0.055, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.07);
+        }
+
+        playHeartbeat(proximity) {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const interval = Math.max(0.28, 0.92 - proximity * 0.62);
+            if (now - this.lastHeartbeat < interval) return;
+            this.lastHeartbeat = now;
+
+            [0, 0.13].forEach((offset, idx) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(idx === 0 ? 52 : 44, now + offset);
+                osc.frequency.exponentialRampToValueAtTime(22, now + offset + 0.11);
+                gain.gain.setValueAtTime(0.26 * proximity, now + offset);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.12);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + offset);
+                osc.stop(now + offset + 0.13);
+            });
+        }
+
+        playPortalChime() {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            [220, 277.18, 329.63].forEach((freq, i) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, now + i * 0.08);
+                gain.gain.setValueAtTime(0.11, now + i * 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.55);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + i * 0.08);
+                osc.stop(now + i * 0.08 + 0.6);
+            });
+        }
+
+        playReviveChime() {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            [330, 440, 660].forEach((freq, i) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + i * 0.06);
+                gain.gain.setValueAtTime(0.12, now + i * 0.06);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.35);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + i * 0.06);
+                osc.stop(now + i * 0.06 + 0.38);
+            });
+        }
+    }
+    const sound = new SoundEngine();
+
+    // ----------------------------------------------------------------------------
+    // 4. LEVEL DEFINITIONS (4 Easier, Fairer & Optimized Poolroom Sectors)
+    // ----------------------------------------------------------------------------
+    const LEVELS = [
+        {
+            name: "ROOM 01 — THE SHALLOW BASIN",
+            sub: "DON'T TOUCH THE WATER",
+            roomSize: { w: 34, l: 52 },
+            spawnP1: { x: -1.5, y: 1.4, z: 21 },
+            spawnP2: { x: 1.5, y: 1.4, z: 21 },
+            exitZ: -22,
+            monsterSpeed: 9.4,
+            monsterPatrolSpeed: 2.8,
+            waterChannels: [
+                { x: -8.5, z: 19 }, { x: 8.5, z: 19 },
+                { x: -8.5, z: 11 }, { x: 8.5, z: 11 },
+                { x: -8.5, z: 4.5 }, { x: 8.5, z: 4.5 },
+                { x: -8.5, z: -2.5 }, { x: 8.5, z: -2.5 },
+                { x: -8.5, z: -11 }, { x: 8.5, z: -11 },
+                { x: -8.5, z: -19 }, { x: 8.5, z: -19 },
+                { x: 0, z: 17.5 },  { x: 0, z: 11.2 },
+                { x: 0, z: 4.6 },   { x: 0, z: -2.5 },
+                { x: 0, z: -8.8 },  { x: 0, z: -14.8 },
+                { x: -3.2, z: -11.6 }, { x: 3.2, z: -11.6 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 21.5, w: 10.5, d: 6.2 },
+                { type: 'static', x: -1.6, y: 0.25, z: 14.4, w: 5.4, d: 4.2 },
+                { type: 'static', x: 1.6, y: 0.25, z: 7.8, w: 5.4, d: 4.2 },
+                { type: 'sinking', x: 0, y: 0.25, z: 1.2, w: 4.8, d: 4.4 },
+                { type: 'static', x: -2.8, y: 0.25, z: -5.6, w: 4.4, d: 4.4 },
+                { type: 'static', x: 2.8, y: 0.25, z: -5.6, w: 4.4, d: 4.4 },
+                { type: 'static', x: -2.4, y: 0.25, z: -11.8, w: 4.0, d: 4.4 },
+                { type: 'static', x: 2.4, y: 0.25, z: -11.8, w: 4.0, d: 4.4 },
+                { type: 'static', x: 0, y: 0.25, z: -17.5, w: 6.5, d: 3.8 },
+                { type: 'static', x: 0, y: 0.25, z: -22.2, w: 10.5, d: 5.2 }
+            ],
+            pickups: [
+                { kind: 'pebble', x: -2.2, y: 0.72, z: 20.2 },
+                { kind: 'duck', x: 2.4, y: 0.72, z: 20.0 },
+                { kind: 'bottle', x: -2.8, y: 0.72, z: -5.6 },
+                { kind: 'pebble', x: 2.8, y: 0.72, z: -5.6 }
+            ],
+            pillars: [
+                { x: -12, z: 13 }, { x: 12, z: 13 },
+                { x: -12, z: -1 }, { x: 12, z: -1 },
+                { x: -12, z: -14 }, { x: 12, z: -14 }
+            ]
+        },
+        {
+            name: "ROOM 02 — TURBINE CROSSING",
+            sub: "IT HEARS EVERY RIPPLE",
+            roomSize: { w: 38, l: 58 },
+            spawnP1: { x: -1.5, y: 1.4, z: 24 },
+            spawnP2: { x: 1.5, y: 1.4, z: 24 },
+            exitZ: -25,
+            monsterSpeed: 10.4,
+            monsterPatrolSpeed: 3.1,
+            waterChannels: [
+                { x: -9.5, z: 22 }, { x: 9.5, z: 22 },
+                { x: -9.5, z: 14 }, { x: 9.5, z: 14 },
+                { x: -9.5, z: 6 },  { x: 9.5, z: 6 },
+                { x: -9.5, z: -2 }, { x: 9.5, z: -2 },
+                { x: -9.5, z: -11 }, { x: 9.5, z: -11 },
+                { x: -9.5, z: -21 }, { x: 9.5, z: -21 },
+                { x: 0, z: 19.2 },  { x: 0, z: 10.2 },
+                { x: 0, z: 6.2 },   { x: 0, z: 2.4 },
+                { x: 0, z: -2.5 },  { x: 0, z: -8.2 },
+                { x: 0, z: -17.6 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 24.2, w: 10.5, d: 6.0 },
+                { type: 'rotating', x: 0, y: 0.28, z: 15.0, w: 3.8, d: 9.2, rotSpeed: 0.34 },
+                { type: 'static', x: -3.2, y: 0.25, z: 6.2, w: 4.4, d: 4.8 },
+                { type: 'static', x: 3.2, y: 0.25, z: 6.2, w: 4.4, d: 4.8 },
+                { type: 'sinking', x: -2.4, y: 0.25, z: 0.0, w: 4.4, d: 4.2 },
+                { type: 'sinking', x: 2.4, y: 0.25, z: -5.0, w: 4.4, d: 4.2 },
+                { type: 'rotating', x: 0, y: 0.28, z: -12.8, w: 3.8, d: 9.2, rotSpeed: -0.36 },
+                { type: 'static', x: 0, y: 0.25, z: -20.2, w: 6.4, d: 4.0 },
+                { type: 'static', x: 0, y: 0.25, z: -25.0, w: 10.5, d: 5.5 }
+            ],
+            pickups: [
+                { kind: 'bottle', x: 2.2, y: 0.72, z: 22.8 },
+                { kind: 'pebble', x: -2.2, y: 0.72, z: 22.8 },
+                { kind: 'duck', x: -3.2, y: 0.72, z: 6.2 },
+                { kind: 'bottle', x: 3.2, y: 0.72, z: 6.2 }
+            ],
+            pillars: [
+                { x: -14, z: 16 }, { x: 14, z: 16 },
+                { x: -14, z: 0 },  { x: 14, z: 0 },
+                { x: -14, z: -16 }, { x: 14, z: -16 }
+            ]
+        },
+        {
+            name: "ROOM 03 — SUNKEN LABYRINTH",
+            sub: "THROW DISTRACTIONS INTO THE DARK",
+            roomSize: { w: 42, l: 62 },
+            spawnP1: { x: -1.5, y: 1.4, z: 26 },
+            spawnP2: { x: 1.5, y: 1.4, z: 26 },
+            exitZ: -27,
+            monsterSpeed: 11.2,
+            monsterPatrolSpeed: 3.4,
+            waterChannels: [
+                { x: -10.5, z: 24 }, { x: 10.5, z: 24 },
+                { x: -10.5, z: 15 }, { x: 10.5, z: 15 },
+                { x: -10.5, z: 6 },  { x: 10.5, z: 6 },
+                { x: -10.5, z: -4 }, { x: 10.5, z: -4 },
+                { x: -10.5, z: -13 }, { x: 10.5, z: -13 },
+                { x: -10.5, z: -23 }, { x: 10.5, z: -23 },
+                { x: 0, z: 21.8 },   { x: 0, z: 16.0 },
+                { x: 0, z: 10.2 },   { x: 0, z: 4.4 },
+                { x: 0, z: 1.0 },    { x: 0, z: -4.5 },
+                { x: 0, z: -10.5 },  { x: 0, z: -14.8 },
+                { x: -5.5, z: 13.2 }, { x: 5.5, z: 13.2 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 26.2, w: 10.5, d: 6.0 },
+                { type: 'sinking', x: -2.4, y: 0.25, z: 19.0, w: 4.4, d: 4.2 },
+                { type: 'sinking', x: 2.2, y: 0.25, z: 13.2, w: 4.4, d: 4.2 },
+                { type: 'sinking', x: -2.2, y: 0.25, z: 7.4, w: 4.4, d: 4.2 },
+                { type: 'static', x: -3.6, y: 0.25, z: 1.0, w: 4.8, d: 4.2 },
+                { type: 'static', x: 3.6, y: 0.25, z: 1.0, w: 4.8, d: 4.2 },
+                { type: 'static', x: -4.2, y: 0.25, z: -4.8, w: 4.2, d: 5.2 },
+                { type: 'static', x: 4.2, y: 0.25, z: -4.8, w: 4.2, d: 5.2 },
+                { type: 'static', x: -3.2, y: 0.25, z: -10.8, w: 4.4, d: 4.4 },
+                { type: 'static', x: 3.2, y: 0.25, z: -10.8, w: 4.4, d: 4.4 },
+                { type: 'rotating', x: 0, y: 0.28, z: -18.0, w: 3.8, d: 8.8, rotSpeed: 0.42 },
+                { type: 'static', x: 0, y: 0.25, z: -26.8, w: 10.5, d: 5.5 }
+            ],
+            pickups: [
+                { kind: 'duck', x: -2.5, y: 0.72, z: 24.8 },
+                { kind: 'bottle', x: 2.5, y: 0.72, z: 24.8 },
+                { kind: 'pebble', x: -4.2, y: 0.72, z: -4.8 },
+                { kind: 'bottle', x: 4.2, y: 0.72, z: -4.8 },
+                { kind: 'duck', x: -3.2, y: 0.72, z: -10.8 }
+            ],
+            pillars: [
+                { x: -15, z: 18 }, { x: 15, z: 18 },
+                { x: -15, z: 1 },  { x: 15, z: 1 },
+                { x: -15, z: -15 }, { x: 15, z: -15 }
+            ]
+        },
+        {
+            name: "ROOM 04 — THE DEEP ABYSS",
+            sub: "CLIMB BACK TO SAFETY",
+            roomSize: { w: 44, l: 64 },
+            spawnP1: { x: -1.5, y: 1.4, z: 27 },
+            spawnP2: { x: 1.5, y: 1.4, z: 27 },
+            exitZ: -28,
+            monsterSpeed: 12.0,
+            monsterPatrolSpeed: 3.7,
+            waterChannels: [
+                { x: -11.0, z: 25 }, { x: 11.0, z: 25 },
+                { x: -11.0, z: 16 }, { x: 11.0, z: 16 },
+                { x: -11.0, z: 6 },  { x: 11.0, z: 6 },
+                { x: -11.0, z: -3 }, { x: 11.0, z: -3 },
+                { x: -11.0, z: -13 }, { x: 11.0, z: -13 },
+                { x: -11.0, z: -24 }, { x: 11.0, z: -24 },
+                { x: 0, z: 22.8 },   { x: 0, z: 17.0 },
+                { x: 0, z: 11.5 },   { x: 0, z: 2.2 },
+                { x: 0, z: -0.8 },   { x: 0, z: -7.5 },
+                { x: 0, z: -11.4 },  { x: 0, z: -19.5 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 27.2, w: 10.5, d: 6.0 },
+                { type: 'floating', x: -2.4, y: 0.22, z: 20.0, w: 4.5, d: 4.4 },
+                { type: 'floating', x: 2.4, y: 0.22, z: 14.0, w: 4.5, d: 4.4 },
+                { type: 'rotating', x: 0, y: 0.28, z: 6.5, w: 3.8, d: 9.0, rotSpeed: -0.45 },
+                { type: 'sinking', x: -2.8, y: 0.25, z: -0.8, w: 4.4, d: 4.2 },
+                { type: 'sinking', x: 2.8, y: 0.25, z: -0.8, w: 4.4, d: 4.2 },
+                { type: 'static', x: -3.2, y: 0.25, z: -7.5, w: 4.4, d: 4.6 },
+                { type: 'static', x: 3.2, y: 0.25, z: -7.5, w: 4.4, d: 4.6 },
+                { type: 'rotating', x: 0, y: 0.28, z: -15.2, w: 3.8, d: 9.0, rotSpeed: 0.48 },
+                { type: 'static', x: 0, y: 0.25, z: -22.2, w: 6.2, d: 4.0 },
+                { type: 'static', x: 0, y: 0.25, z: -27.8, w: 10.5, d: 5.5 }
+            ],
+            pickups: [
+                { kind: 'bottle', x: -2.2, y: 0.72, z: 25.8 },
+                { kind: 'duck', x: 2.2, y: 0.72, z: 25.8 },
+                { kind: 'bottle', x: -3.2, y: 0.72, z: -7.5 },
+                { kind: 'duck', x: 3.2, y: 0.72, z: -7.5 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 21, w: 12.0, d: 8.5 },
+                { type: 'static', x: -1.4, y: 0.25, z: 14.0, w: 6.8, d: 6.2 },
+                { type: 'static', x: 1.4, y: 0.25, z: 8.0, w: 6.8, d: 6.2 },
+                { type: 'sinking', x: 0, y: 0.25, z: 2.0, w: 6.2, d: 6.0 },
+                { type: 'static', x: 0, y: 0.25, z: -4.2, w: 10.5, d: 7.0 },
+                { type: 'static', x: 0, y: 0.25, z: -11.2, w: 5.4, d: 8.0 },
+                { type: 'static', x: 0, y: 0.25, z: -17.0, w: 8.0, d: 5.2 },
+                { type: 'static', x: 0, y: 0.25, z: -21.8, w: 12.0, d: 7.0 }
+            ],
+            pickups: [
+                { kind: 'pebble', x: -2.2, y: 0.72, z: 19.5 },
+                { kind: 'duck', x: 2.4, y: 0.72, z: 19.2 },
+                { kind: 'bottle', x: -2.0, y: 0.72, z: -4.2 },
+                { kind: 'pebble', x: 2.0, y: 0.72, z: -4.2 }
+            ],
+            pillars: [
+                { x: -12, z: 13 }, { x: 12, z: 13 },
+                { x: -12, z: -1 }, { x: 12, z: -1 },
+                { x: -12, z: -14 }, { x: 12, z: -14 }
+            ]
+        },
+        {
+            name: "ROOM 02 — TURBINE CROSSING",
+            sub: "IT HEARS EVERY RIPPLE",
+            roomSize: { w: 38, l: 58 },
+            spawnP1: { x: -1.5, y: 1.4, z: 24 },
+            spawnP2: { x: 1.5, y: 1.4, z: 24 },
+            exitZ: -25,
+            monsterSpeed: 10.4,
+            monsterPatrolSpeed: 3.1,
+            waterChannels: [
+                { x: -9.5, z: 22 }, { x: 9.5, z: 22 },
+                { x: -9.5, z: 14 }, { x: 9.5, z: 14 },
+                { x: -9.5, z: 6 },  { x: 9.5, z: 6 },
+                { x: -9.5, z: -2 }, { x: 9.5, z: -2 },
+                { x: -9.5, z: -11 }, { x: 9.5, z: -11 },
+                { x: -9.5, z: -21 }, { x: 9.5, z: -21 },
+                { x: 0, z: 10.6 },  { x: 0, z: 2.8 },
+                { x: 0, z: -8.2 },  { x: 0, z: -17.4 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 24, w: 12.0, d: 8.0 },
+                { type: 'rotating', x: 0, y: 0.28, z: 15.0, w: 4.4, d: 11.2, rotSpeed: 0.34 },
+                { type: 'static', x: 0, y: 0.25, z: 6.2, w: 10.0, d: 6.8 },
+                { type: 'sinking', x: -2.0, y: 0.25, z: 0.0, w: 5.6, d: 5.4 },
+                { type: 'sinking', x: 2.0, y: 0.25, z: -5.0, w: 5.6, d: 5.4 },
+                { type: 'rotating', x: 0, y: 0.28, z: -12.8, w: 4.4, d: 11.2, rotSpeed: -0.36 },
+                { type: 'static', x: 0, y: 0.25, z: -20.0, w: 7.5, d: 5.2 },
+                { type: 'static', x: 0, y: 0.25, z: -24.8, w: 12.0, d: 7.0 }
+            ],
+            pickups: [
+                { kind: 'bottle', x: 2.2, y: 0.72, z: 22.5 },
+                { kind: 'pebble', x: -2.2, y: 0.72, z: 22.5 },
+                { kind: 'duck', x: 0, y: 0.72, z: 6.2 },
+                { kind: 'bottle', x: 2.0, y: 0.72, z: 6.0 }
+            ],
+            pillars: [
+                { x: -14, z: 16 }, { x: 14, z: 16 },
+                { x: -14, z: 0 },  { x: 14, z: 0 },
+                { x: -14, z: -16 }, { x: 14, z: -16 }
+            ]
+        },
+        {
+            name: "ROOM 03 — SUNKEN LABYRINTH",
+            sub: "THROW DISTRACTIONS INTO THE DARK",
+            roomSize: { w: 42, l: 62 },
+            spawnP1: { x: -1.5, y: 1.4, z: 26 },
+            spawnP2: { x: 1.5, y: 1.4, z: 26 },
+            exitZ: -27,
+            monsterSpeed: 11.2,
+            monsterPatrolSpeed: 3.4,
+            waterChannels: [
+                { x: -10.5, z: 24 }, { x: 10.5, z: 24 },
+                { x: -10.5, z: 15 }, { x: 10.5, z: 15 },
+                { x: -10.5, z: 6 },  { x: 10.5, z: 6 },
+                { x: -10.5, z: -4 }, { x: 10.5, z: -4 },
+                { x: -10.5, z: -13 }, { x: 10.5, z: -13 },
+                { x: -10.5, z: -23 }, { x: 10.5, z: -23 },
+                { x: 0, z: -4.5 },   { x: 0, z: -14.2 },
+                { x: -5.5, z: 13.2 }, { x: 5.5, z: 13.2 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 26, w: 11.5, d: 7.5 },
+                { type: 'sinking', x: -2.2, y: 0.25, z: 19.0, w: 5.4, d: 5.2 },
+                { type: 'sinking', x: 0, y: 0.25, z: 13.2, w: 5.4, d: 5.2 },
+                { type: 'sinking', x: 2.2, y: 0.25, z: 7.4, w: 5.4, d: 5.2 },
+                { type: 'static', x: 0, y: 0.25, z: 1.0, w: 13.5, d: 5.0 },
+                { type: 'static', x: -4.2, y: 0.25, z: -4.5, w: 4.8, d: 8.0 },
+                { type: 'static', x: 4.2, y: 0.25, z: -4.5, w: 4.8, d: 8.0 },
+                { type: 'static', x: 0, y: 0.25, z: -10.5, w: 9.5, d: 6.2 },
+                { type: 'rotating', x: 0, y: 0.28, z: -18.0, w: 4.2, d: 10.5, rotSpeed: 0.42 },
+                { type: 'static', x: 0, y: 0.25, z: -26.8, w: 12.0, d: 7.0 }
+            ],
+            pickups: [
+                { kind: 'duck', x: -2.5, y: 0.72, z: 24.5 },
+                { kind: 'bottle', x: 2.5, y: 0.72, z: 24.5 },
+                { kind: 'pebble', x: -4.2, y: 0.72, z: -4.5 },
+                { kind: 'bottle', x: 4.2, y: 0.72, z: -4.5 },
+                { kind: 'duck', x: 0, y: 0.72, z: -10.5 }
+            ],
+            pillars: [
+                { x: -15, z: 18 }, { x: 15, z: 18 },
+                { x: -15, z: 1 },  { x: 15, z: 1 },
+                { x: -15, z: -15 }, { x: 15, z: -15 }
+            ]
+        },
+        {
+            name: "ROOM 04 — THE DEEP ABYSS",
+            sub: "CLIMB BACK TO SAFETY",
+            roomSize: { w: 44, l: 64 },
+            spawnP1: { x: -1.5, y: 1.4, z: 27 },
+            spawnP2: { x: 1.5, y: 1.4, z: 27 },
+            exitZ: -28,
+            monsterSpeed: 12.0,
+            monsterPatrolSpeed: 3.7,
+            waterChannels: [
+                { x: -11.0, z: 25 }, { x: 11.0, z: 25 },
+                { x: -11.0, z: 16 }, { x: 11.0, z: 16 },
+                { x: -11.0, z: 6 },  { x: 11.0, z: 6 },
+                { x: -11.0, z: -3 }, { x: 11.0, z: -3 },
+                { x: -11.0, z: -13 }, { x: 11.0, z: -13 },
+                { x: -11.0, z: -24 }, { x: 11.0, z: -24 },
+                { x: 0, z: 11.5 },   { x: 0, z: 2.2 },
+                { x: 0, z: -4.2 },   { x: 0, z: -11.2 }
+            ],
+            platforms: [
+                { type: 'static', x: 0, y: 0.25, z: 27, w: 11.5, d: 7.5 },
+                { type: 'floating', x: -2.0, y: 0.22, z: 20.0, w: 5.5, d: 5.4 },
+                { type: 'floating', x: 2.0, y: 0.22, z: 14.0, w: 5.5, d: 5.4 },
+                { type: 'rotating', x: 0, y: 0.28, z: 6.5, w: 4.2, d: 10.8, rotSpeed: -0.45 },
+                { type: 'sinking', x: -2.2, y: 0.25, z: -0.8, w: 5.4, d: 5.2 },
+                { type: 'sinking', x: 2.2, y: 0.25, z: -0.8, w: 5.4, d: 5.2 },
+                { type: 'static', x: 0, y: 0.25, z: -7.5, w: 9.5, d: 6.2 },
+                { type: 'rotating', x: 0, y: 0.28, z: -15.2, w: 4.2, d: 10.8, rotSpeed: 0.48 },
+                { type: 'static', x: 0, y: 0.25, z: -22.2, w: 7.0, d: 5.2 },
+                { type: 'static', x: 0, y: 0.25, z: -27.8, w: 12.0, d: 7.0 }
+            ],
+            pickups: [
+                { kind: 'bottle', x: -2.2, y: 0.72, z: 25.5 },
+                { kind: 'duck', x: 2.2, y: 0.72, z: 25.5 },
+                { kind: 'bottle', x: -1.8, y: 0.72, z: -7.5 },
+                { kind: 'duck', x: 1.8, y: 0.72, z: -7.5 }
+            ],
+            pillars: [
+                { x: -16, z: 20 }, { x: 16, z: 20 },
+                { x: -16, z: 2 },  { x: 16, z: 2 },
+                { x: -16, z: -14 }, { x: 16, z: -14 }
+            ]
+        }
+    ];
+
+    // ----------------------------------------------------------------------------
+    // 5. THREE.JS SCENE & ANTI-LAG RENDERER SETUP
+    // ----------------------------------------------------------------------------
+    const canvas = document.getElementById('game-canvas');
+    const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        powerPreference: 'high-performance',
+        stencil: false
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = false;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.85;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x010304);
+    scene.fog = new THREE.FogExp2(0x020608, 0.044);
+
+    // Reusable scratch math objects (zero per-frame allocations)
+    const _v1 = new THREE.Vector3();
+    const _v2 = new THREE.Vector3();
+    const _v3 = new THREE.Vector3();
+    const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+    // Procedural damp grimy ceramic tile material
+    function createGrimyTileMaterial() {
+        const size = 256;
+        const c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        const ctx = c.getContext('2d');
+
+        ctx.fillStyle = '#334245';
+        ctx.fillRect(0, 0, size, size);
+
+        const cells = 4;
+        const step = size / cells;
+        for (let gx = 0; gx < cells; gx++) {
+            for (let gy = 0; gy < cells; gy++) {
+                const shade = 44 + Math.floor(Math.random() * 14);
+                ctx.fillStyle = `rgb(${shade}, ${shade + 12}, ${shade + 14})`;
+                ctx.fillRect(gx * step + 2, gy * step + 2, step - 4, step - 4);
+            }
+        }
+
+        // Damp grime & rust spots
+        for (let i = 0; i < 65; i++) {
+            const x = Math.random() * size;
+            const y = Math.random() * size;
+            const r = 4 + Math.random() * 18;
+            ctx.fillStyle = Math.random() > 0.35 ? 'rgba(12, 22, 18, 0.28)' : 'rgba(58, 34, 20, 0.22)';
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Grout grid lines
+        ctx.strokeStyle = '#131b1d';
+        ctx.lineWidth = 3;
+        for (let i = 0; i <= cells; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * step, 0);
+            ctx.lineTo(i * step, size);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, i * step);
+            ctx.lineTo(size, i * step);
+            ctx.stroke();
+        }
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        return new THREE.MeshStandardMaterial({
+            map: tex,
+            roughness: 0.42,
+            metalness: 0.08
+        });
+    }
+
+    function createDarkWaterTextures() {
+        const size = 256;
+        const c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        const ctx = c.getContext('2d');
+
+        ctx.fillStyle = '#041216';
+        ctx.fillRect(0, 0, size, size);
+
+        ctx.strokeStyle = 'rgba(26, 78, 88, 0.28)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 42; i++) {
+            const x = Math.random() * size;
+            const y = Math.random() * size;
+            const r = 10 + Math.random() * 28;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(14, 18);
+        return tex;
+    }
+
+    const sharedTileMat = createGrimyTileMaterial();
+    const sharedSinkingMat = sharedTileMat.clone();
+    sharedSinkingMat.color.setHex(0xb89c8a);
+    const sharedRotatingMat = sharedTileMat.clone();
+    sharedRotatingMat.color.setHex(0x8aa8ad);
+    const waterNormalTex = createDarkWaterTextures();
+    const sharedWaterMat = new THREE.MeshStandardMaterial({
+        color: 0x05181d,
+        map: waterNormalTex,
+        roughness: 0.18,
+        metalness: 0.35,
+        transparent: true,
+        opacity: 0.88
+    });
+    const sharedPoolFloorMat = new THREE.MeshBasicMaterial({ color: 0x010507 });
+    const sharedFixtureFrameMat = new THREE.MeshBasicMaterial({ color: 0x111719 });
+    const sharedExitFrameMat = new THREE.MeshStandardMaterial({ color: 0x0e181a, roughness: 0.5 });
+    const sharedExitDoorMat = new THREE.MeshBasicMaterial({ color: 0x0d9488 });
+    const sharedRippleGeo = new THREE.RingGeometry(0.18, 0.34, 24);
+    const sharedSprayGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+    const sharedSprayMat = new THREE.MeshBasicMaterial({ color: 0x6ea6b0, transparent: true, opacity: 0.72 });
+
+    // ----------------------------------------------------------------------------
+    // 6. GAME STATE & PLAYERS
+    // ----------------------------------------------------------------------------
+    let gameMode = 'solo'; // 'solo' | 'coop'
+    let gameState = 'menu'; // 'menu' | 'playing' | 'paused' | 'jumpscare'
+    let currentLevelIdx = 0;
+    let totalElapsed = 0;
+    let menuOrbitAngle = 0;
+    let roundBannerTimeout = null;
+    let jumpscareTimeout = null;
+
+    const keysDown = {};
+    const levelGroup = new THREE.Group();
+    scene.add(levelGroup);
+
+    let platforms = [];
+    let pickups = [];
+    let thrownItems = [];
+    let splashRipples = [];
+    let splashParticles = [];
+    let flickeringLights = [];
+    let levelColliders = [];
+    let activePlayersCache = [];
+    let navNodes = [];
+    let navAdj = [];
+
+    // Articulated Realistic Amphibious Predator ("The Kamogorgan")
+    const monster = {
+        mesh: new THREE.Group(),
+        pos: new THREE.Vector3(-8.5, -0.4, 3),
+        vel: new THREE.Vector3(0, 0, 0),
+        targetPos: new THREE.Vector3(-8.5, -0.4, -11),
+        heading: 0,
+        state: 'PATROL', // 'PATROL' | 'INVESTIGATE' | 'HUNT' | 'RETREAT'
+        alertTimer: 0,
+        patrolNodeIdx: 0,
+        pathQueue: [],
+        pathRecalcTimer: 0,
+        breachHeight: -0.4,
+        clickTimer: 1.5,
+        spineSegments: [],
+        limbs: [],
+        jawPetals: []
+    };
+
+    function buildMonsterMesh() {
+        const skinMat = new THREE.MeshStandardMaterial({
+            color: 0x161c1d,
+            roughness: 0.22,
+            metalness: 0.18
+        });
+        const fleshMat = new THREE.MeshStandardMaterial({
+            color: 0x4a0c10,
+            roughness: 0.35,
+            emissive: 0x1c0204
+        });
+        const boneMat = new THREE.MeshStandardMaterial({
+            color: 0x8f8a7e,
+            roughness: 0.45
+        });
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+
+        // Undulating spine & dorsal ridge segments
+        for (let i = 0; i < 6; i++) {
+            const segGroup = new THREE.Group();
+            segGroup.position.z = -i * 0.48;
+            const radius = Math.max(0.14, 0.36 - i * 0.038);
+
+            const bodyMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(radius, 10, 8),
+                skinMat
+            );
+            bodyMesh.scale.set(0.95, 0.85, 1.35);
+            segGroup.add(bodyMesh);
+
+            // Dorsal jagged spine fin
+            const fin = new THREE.Mesh(
+                new THREE.ConeGeometry(radius * 0.42, radius * 1.65, 4),
+                boneMat
+            );
+            fin.position.set(0, radius * 0.95, 0);
+            fin.rotation.x = -0.35;
+            segGroup.add(fin);
+
+            monster.mesh.add(segGroup);
+            monster.spineSegments.push({ group: segGroup, index: i });
+        }
+
+        // Four multi-jointed clawed limbs
+        const limbConfigs = [
+            { side: -1, z: -0.35, index: 0 },
+            { side: 1, z: -0.35, index: 1 },
+            { side: -1, z: -1.45, index: 2 },
+            { side: 1, z: -1.45, index: 3 }
+        ];
+        limbConfigs.forEach((cfg) => {
+            const limbGroup = new THREE.Group();
+            limbGroup.position.set(cfg.side * 0.32, -0.05, cfg.z);
+
+            const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.55, 6), skinMat);
+            upper.rotation.z = cfg.side * 1.15;
+            upper.position.x = cfg.side * 0.24;
+            limbGroup.add(upper);
+
+            const claw = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.28, 4), boneMat);
+            claw.rotation.z = cfg.side * 1.55;
+            claw.position.set(cfg.side * 0.54, -0.08, 0.08);
+            limbGroup.add(claw);
+
+            monster.mesh.add(limbGroup);
+            monster.limbs.push({ group: limbGroup, side: cfg.side, index: cfg.index });
+        });
+
+        // Head & 4-way split-petal maw
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 0.05, 0.36);
+
+        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), skinMat);
+        skull.scale.set(0.95, 0.85, 1.25);
+        headGroup.add(skull);
+
+        const throat = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), fleshMat);
+        throat.position.z = 0.14;
+        headGroup.add(throat);
+
+        // Sunken pinprick red eyes
+        [-0.14, 0.14].forEach((ex) => {
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 6), eyeMat);
+            eye.position.set(ex, 0.11, 0.27);
+            headGroup.add(eye);
+        });
+
+        // 4 split-petal jaws lined with needle teeth
+        const petalAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+        petalAngles.forEach((ang) => {
+            const pivot = new THREE.Group();
+            pivot.position.z = 0.24;
+            pivot.rotation.z = ang;
+
+            const flap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.44, 4), fleshMat);
+            flap.rotation.x = Math.PI / 2;
+            flap.position.set(0.11, 0, 0.18);
+            pivot.add(flap);
+
+            const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.14, 4), boneMat);
+            tooth.rotation.x = Math.PI / 2;
+            tooth.position.set(0.06, 0, 0.26);
+            pivot.add(tooth);
+
+            headGroup.add(pivot);
+            monster.jawPetals.push(pivot);
+        });
+
+        monster.mesh.add(headGroup);
+        scene.add(monster.mesh);
+    }
+    buildMonsterMesh();
+
+    // Player factory (First-person camera + handheld swaying flashlight + held 3D item + 2P co-op body & revive ring)
+    function createPlayer(id) {
+        const camera = new THREE.PerspectiveCamera(74, window.innerWidth / window.innerHeight, 0.1, 85);
+        camera.rotation.order = 'YXZ';
+
+        // Tactical swaying flashlight attached to camera
+        const flashlight = new THREE.SpotLight(0xdbeafe, 2.6, 34, Math.PI / 4.6, 0.48, 1.15);
+        flashlight.position.set(0.18, -0.14, -0.1);
+        flashlight.target.position.set(0.1, -0.18, -10);
+        camera.add(flashlight);
+        camera.add(flashlight.target);
+
+        // Right-hand 3D held item indicator (replaces all UI)
+        const handGroup = new THREE.Group();
+        handGroup.position.set(0.34, -0.28, -0.52);
+
+        const pebbleHand = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(0.065, 0),
+            new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7 })
+        );
+        const bottleHand = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.045, 0.055, 0.22, 8),
+            new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.2, transparent: true, opacity: 0.85 })
+        );
+        const duckHand = new THREE.Mesh(
+            new THREE.SphereGeometry(0.075, 8, 8),
+            new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.4 })
+        );
+        pebbleHand.visible = false;
+        bottleHand.visible = false;
+        duckHand.visible = false;
+        handGroup.add(pebbleHand, bottleHand, duckHand);
+        camera.add(handGroup);
+
+        scene.add(camera);
+
+        // 3rd-person body mesh visible to teammate in 2P Split-Screen
+        const bodyGroup = new THREE.Group();
+        const torsoColor = id === 0 ? 0x2563eb : 0xd97706;
+        const torso = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.26, 0.28, 1.05, 8),
+            new THREE.MeshStandardMaterial({ color: torsoColor, roughness: 0.65 })
+        );
+        torso.position.y = 0.85;
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.21, 8, 8),
+            new THREE.MeshStandardMaterial({ color: 0xd6c7b8, roughness: 0.6 })
+        );
+        head.position.y = 1.55;
+        bodyGroup.add(torso, head);
+
+        // Diegetic 3D downed distress beacon & progress ring (zero UI)
+        const distressLight = new THREE.PointLight(0xef4444, 0, 7);
+        distressLight.position.set(0, 0.8, 0);
+        bodyGroup.add(distressLight);
+
+        const reviveRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.65, 0.85, 24),
+            new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide })
+        );
+        reviveRing.rotation.x = -Math.PI / 2;
+        reviveRing.position.y = 0.08;
+        reviveRing.visible = false;
+        bodyGroup.add(reviveRing);
+
+        bodyGroup.visible = false;
+        scene.add(bodyGroup);
+
+        return {
+            id,
+            camera,
+            flashlight,
+            flashlightOn: true,
+            handGroup,
+            handMeshes: { pebble: pebbleHand, bottle: bottleHand, duck: duckHand },
+            bodyGroup,
+            distressLight,
+            reviveRing,
+            pos: new THREE.Vector3(0, 1.4, 20),
+            vel: new THREE.Vector3(0, 0, 0),
+            yaw: 0,
+            pitch: 0,
+            grounded: false,
+            standingPlatform: null,
+            heldItem: null,
+            downed: false,
+            bleedTimer: 22.0,
+            reviveProgress: 0,
+            splashCooldown: 0,
+            stepTimer: 0,
+            bobPhase: 0,
+            shakeTrauma: 0,
+            reachedExit: false
+        };
+    }
+
+    const players = [createPlayer(0), createPlayer(1)];
+
+    // ----------------------------------------------------------------------------
+    // 7. LEVEL BUILDER & OPTIMIZED MEMORY DISPOSAL
+    // ----------------------------------------------------------------------------
+    function showRoundBanner(title, sub) {
+        const banner = document.getElementById('round-banner');
+        document.getElementById('round-banner-title').textContent = title;
+        document.getElementById('round-banner-sub').textContent = sub;
+        banner.classList.add('visible');
+        if (roundBannerTimeout) clearTimeout(roundBannerTimeout);
+        roundBannerTimeout = setTimeout(() => {
+            banner.classList.remove('visible');
+        }, 2000);
+    }
+
+    function clearLevelGroup() {
+        while (levelGroup.children.length > 0) {
+            const child = levelGroup.children[0];
+            levelGroup.remove(child);
+            if (child.geometry && child.userData && child.userData.uniqueGeo) {
+                child.geometry.dispose();
+            }
+        }
+        platforms = [];
+        pickups = [];
+        thrownItems = [];
+        splashRipples = [];
+        splashParticles = [];
+        flickeringLights = [];
+        levelColliders = [];
+    }
+
+    function resetPlayerForLevel(p, spawn) {
+        p.pos.set(spawn.x, spawn.y + 1.55, spawn.z);
+        p.vel.set(0, 0, 0);
+        p.yaw = 0;
+        p.pitch = 0;
+        p.grounded = false;
+        p.standingPlatform = null;
+        p.heldItem = null;
+        p.downed = false;
+        p.bleedTimer = 22.0;
+        p.reviveProgress = 0;
+        p.splashCooldown = 0;
+        p.shakeTrauma = 0;
+        p.reachedExit = false;
+        p.flashlightOn = true;
+        p.flashlight.intensity = 2.6;
+        p.distressLight.intensity = 0;
+        p.reviveRing.visible = false;
+        p.bodyGroup.rotation.z = 0;
+        updatePlayerHandVisual(p);
+    }
+
+    function updatePlayerHandVisual(p) {
+        p.handMeshes.pebble.visible = p.heldItem === 'pebble';
+        p.handMeshes.bottle.visible = p.heldItem === 'bottle';
+        p.handMeshes.duck.visible = p.heldItem === 'duck';
+    }
+
+    function loadLevel(idx, showBanner = true) {
+        currentLevelIdx = idx % LEVELS.length;
+        const lvl = LEVELS[currentLevelIdx];
+        clearLevelGroup();
+
+        const halfW = lvl.roomSize.w / 2;
+        const halfL = lvl.roomSize.l / 2;
+        const wallHeight = 9.5;
+
+        // Ambient eerie darkness
+        const ambient = new THREE.AmbientLight(0x0c1a1f, 0.32);
+        levelGroup.add(ambient);
+
+        // Pool Floor & Dark Water Surface
+        const floorGeo = new THREE.PlaneGeometry(lvl.roomSize.w, lvl.roomSize.l);
+        floorGeo.rotateX(-Math.PI / 2);
+        const floorMesh = new THREE.Mesh(floorGeo, sharedPoolFloorMat);
+        floorMesh.position.y = -0.85;
+        floorMesh.userData.uniqueGeo = true;
+        levelGroup.add(floorMesh);
+
+        const waterGeo = new THREE.PlaneGeometry(lvl.roomSize.w, lvl.roomSize.l);
+        waterGeo.rotateX(-Math.PI / 2);
+        const waterMesh = new THREE.Mesh(waterGeo, sharedWaterMat);
+        waterMesh.position.y = 0;
+        waterMesh.userData.uniqueGeo = true;
+        levelGroup.add(waterMesh);
+
+        // 4 Tiled Poolroom Walls & Ceiling
+        const wallConfigs = [
+            { w: lvl.roomSize.w, h: wallHeight, x: 0, y: wallHeight / 2 - 0.85, z: -halfL, ry: 0 },
+            { w: lvl.roomSize.w, h: wallHeight, x: 0, y: wallHeight / 2 - 0.85, z: halfL, ry: Math.PI },
+            { w: lvl.roomSize.l, h: wallHeight, x: -halfW, y: wallHeight / 2 - 0.85, z: 0, ry: Math.PI / 2 },
+            { w: lvl.roomSize.l, h: wallHeight, x: halfW, y: wallHeight / 2 - 0.85, z: 0, ry: -Math.PI / 2 }
+        ];
+        wallConfigs.forEach((wc) => {
+            const wGeo = new THREE.PlaneGeometry(wc.w, wc.h);
+            const wMesh = new THREE.Mesh(wGeo, sharedTileMat);
+            wMesh.position.set(wc.x, wc.y, wc.z);
+            wMesh.rotation.y = wc.ry;
+            wMesh.userData.uniqueGeo = true;
+            levelGroup.add(wMesh);
+        });
+
+        const ceilGeo = new THREE.PlaneGeometry(lvl.roomSize.w, lvl.roomSize.l);
+        ceilGeo.rotateX(Math.PI / 2);
+        const ceilMesh = new THREE.Mesh(ceilGeo, sharedTileMat);
+        ceilMesh.position.y = wallHeight - 0.85;
+        ceilMesh.userData.uniqueGeo = true;
+        levelGroup.add(ceilMesh);
+
+        // 3 Well-spaced Flickering Fluorescent Ceiling Fixtures (anti-lag light budget)
+        const lightZPositions = [halfL * 0.55, 0, -halfL * 0.55];
+        lightZPositions.forEach((lz, i) => {
+            const fixture = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.18, 0.75), sharedFixtureFrameMat);
+            fixture.position.set(0, wallHeight - 0.95, lz);
+            fixture.userData.uniqueGeo = true;
+            levelGroup.add(fixture);
+
+            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xcfe8ec });
+            const bulb = new THREE.Mesh(new THREE.PlaneGeometry(3.1, 0.5), bulbMat);
+            bulb.rotation.x = Math.PI / 2;
+            bulb.position.set(0, wallHeight - 1.05, lz);
+            bulb.userData.uniqueGeo = true;
+            levelGroup.add(bulb);
+
+            const pLight = new THREE.PointLight(0xb8dce0, 1.35, 28, 1.5);
+            pLight.position.set(0, wallHeight - 1.5, lz);
+            levelGroup.add(pLight);
+
+            flickeringLights.push({
+                light: pLight,
+                bulbMat,
+                baseIntensity: 1.35,
+                phase: i * 2.1,
+                flickerTimer: 0.4 + Math.random() * 1.8
+            });
+        });
+
+        // Support Pillars
+        const pillarGeo = new THREE.BoxGeometry(1.7, wallHeight, 1.7);
+        lvl.pillars.forEach((pil) => {
+            const pMesh = new THREE.Mesh(pillarGeo, sharedTileMat);
+            pMesh.position.set(pil.x, wallHeight / 2 - 0.85, pil.z);
+            levelGroup.add(pMesh);
+            levelColliders.push({ x: pil.x, z: pil.z, halfW: 0.85, halfD: 0.85 });
+        });
+
+        // Platforms (Static, Sinking, Rotating, Floating)
+        lvl.platforms.forEach((pl) => {
+            const mat = pl.type === 'sinking'
+                ? sharedSinkingMat
+                : (pl.type === 'rotating' ? sharedRotatingMat : sharedTileMat);
+            const geo = new THREE.BoxGeometry(pl.w, 0.65, pl.d);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(pl.x, pl.y, pl.z);
+            mesh.userData.uniqueGeo = true;
+            levelGroup.add(mesh);
+
+            platforms.push({
+                type: pl.type,
+                mesh,
+                baseY: pl.y,
+                w: pl.w,
+                d: pl.d,
+                rotY: 0,
+                rotSpeed: pl.rotSpeed || 0,
+                sinkProgress: 0,
+                steppedOn: false,
+                floatPhase: Math.random() * Math.PI * 2
+            });
+        });
+
+        // Exit Portal Archway at North End
+        const exitGroup = new THREE.Group();
+        exitGroup.position.set(0, 0.58, lvl.exitZ - 1.8);
+
+        const leftPost = new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.2, 0.5), sharedExitFrameMat);
+        leftPost.position.set(-1.35, 1.6, 0);
+        const rightPost = new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.2, 0.5), sharedExitFrameMat);
+        rightPost.position.set(1.35, 1.6, 0);
+        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.45, 0.5), sharedExitFrameMat);
+        topBeam.position.set(0, 3.2, 0);
+        const portalPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.25, 2.95), sharedExitDoorMat);
+        portalPlane.position.set(0, 1.5, 0.05);
+
+        const exitLight = new THREE.PointLight(0x14b8a6, 1.5, 11);
+        exitLight.position.set(0, 2.0, 1.0);
+
+        exitGroup.add(leftPost, rightPost, topBeam, portalPlane, exitLight);
+        levelGroup.add(exitGroup);
+
+        // Throwable Distraction Pickups
+        lvl.pickups.forEach((pk) => {
+            let mesh;
+            if (pk.kind === 'pebble') {
+                mesh = new THREE.Mesh(
+                    new THREE.DodecahedronGeometry(0.16, 0),
+                    new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7 })
+                );
+            } else if (pk.kind === 'bottle') {
+                mesh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.11, 0.13, 0.42, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.2, transparent: true, opacity: 0.85 })
+                );
+            } else {
+                mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.18, 8, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 })
+                );
+            }
+            mesh.position.set(pk.x, pk.y, pk.z);
+            mesh.userData.uniqueGeo = true;
+            levelGroup.add(mesh);
+            pickups.push({ kind: pk.kind, mesh, taken: false, baseY: pk.y });
+        });
+
+        // Reset Monster & Players
+        buildMonsterNavGraph(lvl);
+        const startNode = navNodes[0] || { x: -8.5, z: 0 };
+        monster.pos.set(startNode.x, -0.4, startNode.z);
+        monster.vel.set(0, 0, 0);
+        monster.targetPos.set(startNode.x, -0.4, startNode.z);
+        monster.state = 'PATROL';
+        monster.alertTimer = 0;
+        monster.patrolNodeIdx = 0;
+        monster.pathQueue = [];
+        monster.pathRecalcTimer = 0;
+
+        resetPlayerForLevel(players[0], lvl.spawnP1);
+        resetPlayerForLevel(players[1], lvl.spawnP2);
+
+        updateActivePlayersVisibility();
+
+        if (showBanner && gameState === 'playing') {
+            showRoundBanner(lvl.name, lvl.sub);
+        }
+    }
+
+    function updateActivePlayersVisibility() {
+        if (gameMode === 'solo' || gameState === 'menu') {
+            activePlayersCache = [players[0]];
+            players[0].bodyGroup.visible = false;
+            players[1].bodyGroup.visible = false;
+        } else {
+            activePlayersCache = [players[0], players[1]];
+            players[0].bodyGroup.visible = true;
+            players[1].bodyGroup.visible = true;
+        }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 8. SPLASH RIPPLES, THROWN DISTRACTIONS & JUMP SCARE / STAGE 1 RESET
+    // ----------------------------------------------------------------------------
+    function spawnSplashSpray(x, z, intensity) {
+        const count = Math.min(10, Math.floor(5 + intensity * 4));
+        for (let i = 0; i < count; i++) {
+            const drop = new THREE.Mesh(sharedSprayGeo, sharedSprayMat);
+            drop.position.set(x, 0.08, z);
+            levelGroup.add(drop);
+            const ang = Math.random() * Math.PI * 2;
+            const spd = 1.4 + Math.random() * 2.6 * intensity;
+            splashParticles.push({
+                mesh: drop,
+                vx: Math.cos(ang) * spd,
+                vy: 2.5 + Math.random() * 2.8 * intensity,
+                vz: Math.sin(ang) * spd,
+                life: 0.55
+            });
+        }
+    }
+
+    function triggerSplash(x, z, intensity = 1.0, isDistraction = false) {
+        sound.playSplash(intensity);
+        spawnSplashSpray(x, z, intensity);
+
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: isDistraction ? 0x38bdf8 : 0x94a3b8,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.78
+        });
+        const ring = new THREE.Mesh(sharedRippleGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(x, 0.02, z);
+        levelGroup.add(ring);
+        splashRipples.push({ mesh: ring, mat: ringMat, scale: 1.0, opacity: 0.78, maxScale: 6.5 * intensity });
+
+        // Alert the blind monster to the sound location
+        monster.targetPos.set(x, -0.35, z);
+        monster.state = isDistraction ? 'INVESTIGATE' : 'HUNT';
+        monster.alertTimer = isDistraction ? 6.5 : 5.5;
+        if (!isDistraction) {
+            sound.playMonsterRoar();
+        }
+    }
+
+    function triggerJumpScareAndResetToStage1() {
+        if (gameState === 'jumpscare') return;
+        gameState = 'jumpscare';
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+
+        sound.playJumpScareShriek();
+        const overlay = document.getElementById('jumpscare-overlay');
+        const img = document.getElementById('jumpscare-img');
+        const chosenUrl = preloadedScareImages.length > 0
+            ? preloadedScareImages[Math.floor(Math.random() * preloadedScareImages.length)]
+            : FALLBACK_SCARE_DATA_URL;
+        img.onerror = () => { img.src = FALLBACK_SCARE_DATA_URL; };
+        img.src = chosenUrl;
+        overlay.classList.remove('hidden');
+
+        if (jumpscareTimeout) clearTimeout(jumpscareTimeout);
+        jumpscareTimeout = setTimeout(() => {
+            overlay.classList.add('hidden');
+            gameState = 'playing';
+            // Permadeath: takes you all the way back to Stage 1
+            loadLevel(0, true);
+        }, 1450);
+    }
+
+    function onPlayerCaught(p) {
+        if (gameMode === 'solo') {
+            triggerJumpScareAndResetToStage1();
+            return;
+        }
+
+        // 2-Player Split-Screen Co-op: down player onto nearest dry platform so teammate can revive
+        if (p.downed) return;
+        p.downed = true;
+        p.bleedTimer = 22.0;
+        p.reviveProgress = 0;
+
+        // Place downed player on nearest dry tile
+        let bestPlat = platforms[0];
+        let bestDist = Infinity;
+        for (let i = 0; i < platforms.length; i++) {
+            const pl = platforms[i];
+            if (pl.mesh.position.y < -0.1) continue;
+            const d = Math.hypot(pl.mesh.position.x - p.pos.x, pl.mesh.position.z - p.pos.z);
+            if (d < bestDist) {
+                bestDist = d;
+                bestPlat = pl;
+            }
+        }
+        if (bestPlat) {
+            p.pos.set(bestPlat.mesh.position.x, bestPlat.mesh.position.y + 0.325 + 1.55, bestPlat.mesh.position.z);
+        }
+        p.vel.set(0, 0, 0);
+        p.distressLight.intensity = 2.4;
+        p.reviveRing.visible = true;
+        p.reviveRing.material.color.setHex(0xef4444);
+        p.reviveRing.scale.set(1, 1, 1);
+
+        // Monster retreats briefly after striking
+        monster.state = 'RETREAT';
+        monster.alertTimer = 3.5;
+
+        // If both players are downed, trigger jump scare & reset to Stage 1
+        if (players[0].downed && players[1].downed) {
+            triggerJumpScareAndResetToStage1();
+        }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 9. PLAYER INPUT, MOVEMENT, PLATFORM COLLISION & 2P HOLD-TO-REVIVE
+    // ----------------------------------------------------------------------------
+    function handleInteractOrThrow(p, isThrow) {
+        if (gameState !== 'playing' || p.downed) return;
+        const binds = p.id === 0 ? keybinds.p1 : keybinds.p2;
+
+        if (isThrow) {
+            if (!p.heldItem) return;
+            const kind = p.heldItem;
+            p.heldItem = null;
+            updatePlayerHandVisual(p);
+
+            if (kind === 'duck') sound.playDuckSqueak();
+
+            let projMesh;
+            if (kind === 'pebble') {
+                projMesh = new THREE.Mesh(
+                    new THREE.DodecahedronGeometry(0.14, 0),
+                    new THREE.MeshStandardMaterial({ color: 0x64748b })
+                );
+            } else if (kind === 'bottle') {
+                projMesh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.12, 0.38, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x16a34a })
+                );
+            } else {
+                projMesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.16, 8, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xfacc15 })
+                );
+            }
+
+            const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(p.pitch, p.yaw, 0, 'YXZ'));
+            projMesh.position.copy(p.pos).addScaledVector(forward, 0.65);
+            projMesh.position.y -= 0.15;
+            projMesh.userData.uniqueGeo = true;
+            levelGroup.add(projMesh);
+
+            thrownItems.push({
+                kind,
+                mesh: projMesh,
+                vel: forward.multiplyScalar(14.5).add(new THREE.Vector3(0, 4.2, 0))
+            });
+            return;
+        }
+
+        // Grab nearby distraction item
+        if (!p.heldItem) {
+            for (let i = 0; i < pickups.length; i++) {
+                const pk = pickups[i];
+                if (pk.taken) continue;
+                const d = Math.hypot(pk.mesh.position.x - p.pos.x, pk.mesh.position.z - p.pos.z);
+                if (d < 2.2) {
+                    pk.taken = true;
+                    pk.mesh.visible = false;
+                    p.heldItem = pk.kind;
+                    updatePlayerHandVisual(p);
+                    if (pk.kind === 'duck') sound.playDuckSqueak();
+                    break;
+                }
+            }
+        }
+    }
+
+    function updatePlayer(p, dt) {
+        const lvl = LEVELS[currentLevelIdx];
+        const binds = p.id === 0 ? keybinds.p1 : keybinds.p2;
+
+        if (p.splashCooldown > 0) p.splashCooldown -= dt;
+
+        // Downed state in 2P Split-Screen
+        if (p.downed) {
+            p.bleedTimer -= dt;
+            p.distressLight.intensity = 1.6 + Math.sin(totalElapsed * 10) * 1.1;
+            p.bodyGroup.position.set(p.pos.x, p.pos.y - 1.55, p.pos.z);
+            p.bodyGroup.rotation.z = Math.PI / 2;
+            p.camera.position.set(p.pos.x, p.pos.y - 1.05, p.pos.z);
+            p.camera.rotation.set(0.25, p.yaw, 0.35);
+
+            if (p.bleedTimer <= 0) {
+                triggerJumpScareAndResetToStage1();
+            }
+            return;
+        }
+
+        // 2P Co-op: Check if holding Interact near a downed teammate to revive them (2.5s hold)
+        if (gameMode === 'coop') {
+            const mate = players[p.id === 0 ? 1 : 0];
+            if (mate.downed) {
+                const distToMate = Math.hypot(mate.pos.x - p.pos.x, mate.pos.z - p.pos.z);
+                if (distToMate < 2.5 && keysDown[binds.interact]) {
+                    mate.reviveProgress += dt / 2.5;
+                    mate.reviveRing.material.color.setHex(0x10b981);
+                    const s = Math.max(0.15, 1 - mate.reviveProgress * 0.85);
+                    mate.reviveRing.scale.set(s, s, 1);
+
+                    if (mate.reviveProgress >= 1.0) {
+                        mate.downed = false;
+                        mate.reviveProgress = 0;
+                        mate.bleedTimer = 22.0;
+                        mate.distressLight.intensity = 0;
+                        mate.reviveRing.visible = false;
+                        mate.bodyGroup.rotation.z = 0;
+                        sound.playReviveChime();
+                    }
+                } else if (!keysDown[binds.interact]) {
+                    mate.reviveProgress = Math.max(0, mate.reviveProgress - dt * 0.5);
+                    mate.reviveRing.material.color.setHex(0xef4444);
+                    const s = Math.max(0.15, 1 - mate.reviveProgress * 0.85);
+                    mate.reviveRing.scale.set(s, s, 1);
+                }
+            }
+        }
+
+        // Keyboard look support in 2P Split-Screen (or when pointer lock isn't active)
+        if (gameMode === 'coop' || !document.pointerLockElement) {
+            const turnSpeed = 2.3;
+            if (p.id === 0) {
+                if (keysDown['KeyQ']) p.yaw += turnSpeed * dt;
+                if (keysDown['KeyR']) p.yaw -= turnSpeed * dt;
+            } else {
+                if (keysDown['Comma'] || keysDown['KeyU']) p.yaw += turnSpeed * dt;
+                if (keysDown['Period'] || keysDown['KeyI']) p.yaw -= turnSpeed * dt;
+            }
+        }
+
+        // Agile movement speed
+        const isSprinting = !!keysDown[binds.sprint];
+        const moveSpeed = isSprinting ? 9.8 : 6.5;
+
+        let forwardInput = 0;
+        let strafeInput = 0;
+        if (keysDown[binds.forward]) forwardInput += 1;
+        if (keysDown[binds.backward]) forwardInput -= 1;
+        if (keysDown[binds.left]) strafeInput -= 1;
+        if (keysDown[binds.right]) strafeInput += 1;
+
+        const sinY = Math.sin(p.yaw);
+        const cosY = Math.cos(p.yaw);
+        let moveX = (-sinY * forwardInput + cosY * strafeInput);
+        let moveZ = (-cosY * forwardInput - sinY * strafeInput);
+        const moveLen = Math.hypot(moveX, moveZ);
+        if (moveLen > 0.001) {
+            moveX = (moveX / moveLen) * moveSpeed;
+            moveZ = (moveZ / moveLen) * moveSpeed;
+        }
+
+        p.vel.x = moveX;
+        p.vel.z = moveZ;
+
+        // Jump
+        if (keysDown[binds.jump] && p.grounded) {
+            p.vel.y = 8.1;
+            p.grounded = false;
+            p.standingPlatform = null;
+        }
+
+        // Gravity
+        p.vel.y -= 20.5 * dt;
+
+        // Carry momentum if standing on a rotating bridge
+        if (p.grounded && p.standingPlatform && p.standingPlatform.type === 'rotating') {
+            const pl = p.standingPlatform;
+            const dAngle = pl.rotSpeed * dt;
+            const rx = p.pos.x - pl.mesh.position.x;
+            const rz = p.pos.z - pl.mesh.position.z;
+            const cosA = Math.cos(dAngle);
+            const sinA = Math.sin(dAngle);
+            p.pos.x = pl.mesh.position.x + (rx * cosA - rz * sinA);
+            p.pos.z = pl.mesh.position.z + (rx * sinA + rz * cosA);
+            p.yaw -= dAngle;
+        }
+
+        p.pos.x += p.vel.x * dt;
+        p.pos.y += p.vel.y * dt;
+        p.pos.z += p.vel.z * dt;
+
+        // Room Wall & Pillar Collisions
+        const wallLimitX = lvl.roomSize.w / 2 - 0.55;
+        const wallLimitZ = lvl.roomSize.l / 2 - 0.55;
+        p.pos.x = Math.max(-wallLimitX, Math.min(wallLimitX, p.pos.x));
+        p.pos.z = Math.max(-wallLimitZ, Math.min(wallLimitZ, p.pos.z));
+
+        for (let i = 0; i < levelColliders.length; i++) {
+            const box = levelColliders[i];
+            const pad = 0.42;
+            const cx = Math.max(box.x - box.halfW - pad, Math.min(p.pos.x, box.x + box.halfW + pad));
+            const cz = Math.max(box.z - box.halfD - pad, Math.min(p.pos.z, box.z + box.halfD + pad));
+            const dx = p.pos.x - cx;
+            const dz = p.pos.z - cz;
+            if (dx === 0 && dz === 0) {
+                const penX = (box.halfW + pad) - Math.abs(p.pos.x - box.x);
+                const penZ = (box.halfD + pad) - Math.abs(p.pos.z - box.z);
+                if (penX < penZ) p.pos.x += (p.pos.x >= box.x ? penX : -penX);
+                else p.pos.z += (p.pos.z >= box.z ? penZ : -penZ);
+            }
+        }
+
+        // Platform Landing & Top-Surface Collision
+        p.grounded = false;
+        p.standingPlatform = null;
+        const feetY = p.pos.y - 1.55;
+
+        for (let i = 0; i < platforms.length; i++) {
+            const pl = platforms[i];
+            const topY = pl.mesh.position.y + 0.325;
+            if (topY < -0.35) continue;
+
+            const cosR = Math.cos(-pl.rotY);
+            const sinR = Math.sin(-pl.rotY);
+            const relX = p.pos.x - pl.mesh.position.x;
+            const relZ = p.pos.z - pl.mesh.position.z;
+            const localX = relX * cosR - relZ * sinR;
+            const localZ = relX * sinR + relZ * cosR;
+
+            if (Math.abs(localX) <= pl.w / 2 + 0.25 && Math.abs(localZ) <= pl.d / 2 + 0.25) {
+                if (p.vel.y <= 0 && feetY <= topY + 0.14 && feetY >= topY - 0.55) {
+                    p.pos.y = topY + 1.55;
+                    p.vel.y = 0;
+                    p.grounded = true;
+                    p.standingPlatform = pl;
+                    if (pl.type === 'sinking') pl.steppedOn = true;
+                    break;
+                }
+            }
+        }
+
+        // Pool Floor Limit (when wading in water)
+        if (!p.grounded && feetY < -0.82) {
+            p.pos.y = -0.82 + 1.55;
+            p.vel.y = 0;
+            p.grounded = true;
+        }
+
+        // Footsteps & Handheld Camcorder Shake
+        if (p.grounded && p.standingPlatform && moveLen > 0.1) {
+            p.bobPhase += dt * (isSprinting ? 13.5 : 9.5);
+            p.stepTimer -= dt;
+            if (p.stepTimer <= 0) {
+                p.stepTimer = isSprinting ? 0.31 : 0.44;
+                sound.playFootstep();
+            }
+        } else {
+            p.bobPhase += dt * 1.8;
+        }
+
+        p.shakeTrauma = Math.max(0, p.shakeTrauma - dt * 0.85);
+        const traumaAmp = p.shakeTrauma * p.shakeTrauma * 0.08;
+        const bobY = Math.sin(p.bobPhase) * (moveLen > 0.1 ? 0.055 : 0.015);
+        const bobX = Math.cos(p.bobPhase * 0.5) * (moveLen > 0.1 ? 0.035 : 0.012);
+        const driftYaw = Math.sin(totalElapsed * 1.3 + p.id) * 0.012 + (Math.random() - 0.5) * traumaAmp;
+        const driftPitch = Math.cos(totalElapsed * 1.1 + p.id) * 0.01 + (Math.random() - 0.5) * traumaAmp;
+
+        p.camera.position.set(p.pos.x + bobX, p.pos.y + bobY, p.pos.z);
+        p.camera.rotation.set(p.pitch + driftPitch, p.yaw + driftYaw, Math.sin(p.bobPhase * 0.5) * 0.014);
+
+        // Flashlight sway & right-hand held item bob
+        p.flashlight.position.set(0.18 + bobX * 0.6, -0.14 + bobY * 0.6, -0.1);
+        p.handGroup.position.set(0.34 + bobX * 0.5, -0.28 + bobY * 0.7, -0.52);
+
+        // Sync 3rd-person co-op body
+        if (gameMode === 'coop') {
+            p.bodyGroup.position.set(p.pos.x, p.pos.y - 1.55, p.pos.z);
+            p.bodyGroup.rotation.y = p.yaw;
+        }
+
+        // Check Exit Portal
+        if (p.pos.z <= lvl.exitZ && p.grounded && p.standingPlatform) {
+            p.reachedExit = true;
+        }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 10. WORLD UPDATES (Platforms, Thrown Distractions, Ripples, Flicker, Monster)
+    // ----------------------------------------------------------------------------
+    // Water-channel navigation graph & A* pathfinder so the monster routes cleanly around platforms
+    function isWaterSegmentClear(x1, z1, x2, z2) {
+        const dist = Math.hypot(x2 - x1, z2 - z1);
+        const steps = Math.max(2, Math.ceil(dist / 1.1));
+        const pad = 1.35;
+
+        for (let s = 1; s < steps; s++) {
+            const t = s / steps;
+            const px = x1 + (x2 - x1) * t;
+            const pz = z1 + (z2 - z1) * t;
+
+            // Check pillars
+            for (let i = 0; i < levelColliders.length; i++) {
+                const box = levelColliders[i];
+                if (Math.abs(px - box.x) < box.halfW + pad && Math.abs(pz - box.z) < box.halfD + pad) {
+                    return false;
+                }
+            }
+
+            // Check static & rotating platforms (sinking platforms can be crossed when submerged)
+            for (let i = 0; i < platforms.length; i++) {
+                const pl = platforms[i];
+                if (pl.type === 'sinking' && pl.mesh.position.y < -0.15) continue;
+                const cosR = Math.cos(-pl.rotY);
+                const sinR = Math.sin(-pl.rotY);
+                const relX = px - pl.mesh.position.x;
+                const relZ = pz - pl.mesh.position.z;
+                const localX = relX * cosR - relZ * sinR;
+                const localZ = relX * sinR + relZ * cosR;
+                if (Math.abs(localX) < pl.w / 2 + pad && Math.abs(localZ) < pl.d / 2 + pad) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    function buildMonsterNavGraph(lvl) {
+        navNodes = (lvl.waterChannels || []).map((pt, idx) => ({ id: idx, x: pt.x, z: pt.z }));
+        navAdj = navNodes.map(() => []);
+
+        for (let i = 0; i < navNodes.length; i++) {
+            for (let j = i + 1; j < navNodes.length; j++) {
+                const d = Math.hypot(navNodes[j].x - navNodes[i].x, navNodes[j].z - navNodes[i].z);
+                if (d <= 16.5 && isWaterSegmentClear(navNodes[i].x, navNodes[i].z, navNodes[j].x, navNodes[j].z)) {
+                    navAdj[i].push({ to: j, cost: d });
+                    navAdj[j].push({ to: i, cost: d });
+                }
+            }
+        }
+    }
+
+    function findNearestNavNode(x, z) {
+        let bestIdx = 0;
+        let bestScore = Infinity;
+        for (let i = 0; i < navNodes.length; i++) {
+            const n = navNodes[i];
+            const d = Math.hypot(n.x - x, n.z - z);
+            const clearBonus = isWaterSegmentClear(x, z, n.x, n.z) ? 0 : 12;
+            if (d + clearBonus < bestScore) {
+                bestScore = d + clearBonus;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
+
+    function computeMonsterPath(destX, destZ) {
+        if (navNodes.length === 0) return [{ x: destX, z: destZ }];
+
+        // Direct line of sight through open water channel
+        if (isWaterSegmentClear(monster.pos.x, monster.pos.z, destX, destZ)) {
+            return [{ x: destX, z: destZ }];
+        }
+
+        const startIdx = findNearestNavNode(monster.pos.x, monster.pos.z);
+        const goalIdx = findNearestNavNode(destX, destZ);
+        const nCount = navNodes.length;
+
+        const gScore = new Float32Array(nCount).fill(Infinity);
+        const fScore = new Float32Array(nCount).fill(Infinity);
+        const cameFrom = new Int16Array(nCount).fill(-1);
+        const closed = new Uint8Array(nCount);
+
+        gScore[startIdx] = 0;
+        fScore[startIdx] = Math.hypot(navNodes[goalIdx].x - navNodes[startIdx].x, navNodes[goalIdx].z - navNodes[startIdx].z);
+
+        while (true) {
+            let current = -1;
+            let lowestF = Infinity;
+            for (let i = 0; i < nCount; i++) {
+                if (!closed[i] && fScore[i] < lowestF) {
+                    lowestF = fScore[i];
+                    current = i;
+                }
+            }
+            if (current === -1 || current === goalIdx) break;
+            closed[current] = 1;
+
+            const edges = navAdj[current];
+            for (let e = 0; e < edges.length; e++) {
+                const next = edges[e].to;
+                if (closed[next]) continue;
+                const tentativeG = gScore[current] + edges[e].cost;
+                if (tentativeG < gScore[next]) {
+                    cameFrom[next] = current;
+                    gScore[next] = tentativeG;
+                    fScore[next] = tentativeG + Math.hypot(navNodes[goalIdx].x - navNodes[next].x, navNodes[goalIdx].z - navNodes[next].z);
+                }
+            }
+        }
+
+        const waypoints = [];
+        let curr = goalIdx;
+        let safety = 0;
+        while (curr !== -1 && safety < 32) {
+            waypoints.unshift({ x: navNodes[curr].x, z: navNodes[curr].z });
+            if (curr === startIdx) break;
+            curr = cameFrom[curr];
+            safety++;
+        }
+        waypoints.push({ x: destX, z: destZ });
+        return waypoints;
+    }
+
+    function updatePlatforms(dt) {
+        for (let i = 0; i < platforms.length; i++) {
+            const pl = platforms[i];
+            if (pl.type === 'rotating') {
+                pl.rotY += pl.rotSpeed * dt;
+                pl.mesh.rotation.y = pl.rotY;
+            } else if (pl.type === 'sinking') {
+                if (pl.steppedOn) {
+                    pl.sinkProgress = Math.min(1, pl.sinkProgress + dt * 0.28);
+                } else {
+                    pl.sinkProgress = Math.max(0, pl.sinkProgress - dt * 0.18);
+                }
+                pl.steppedOn = false;
+                pl.mesh.position.y = pl.baseY - pl.sinkProgress * 0.95;
+            } else if (pl.type === 'floating') {
+                pl.floatPhase += dt * 1.8;
+                pl.mesh.position.y = pl.baseY + Math.sin(pl.floatPhase) * 0.08;
+            }
+        }
+    }
+
+    function updateThrownItemsAndEffects(dt) {
+        const lvl = LEVELS[currentLevelIdx];
+        const halfW = lvl.roomSize.w / 2 - 0.5;
+        const halfL = lvl.roomSize.l / 2 - 0.5;
+
+        for (let i = thrownItems.length - 1; i >= 0; i--) {
+            const item = thrownItems[i];
+            item.vel.y -= 18.0 * dt;
+            item.mesh.position.addScaledVector(item.vel, dt);
+            item.mesh.rotation.x += 6 * dt;
+            item.mesh.rotation.z += 5 * dt;
+
+            // Bounce off room walls
+            if (Math.abs(item.mesh.position.x) > halfW) {
+                item.mesh.position.x = Math.sign(item.mesh.position.x) * halfW;
+                item.vel.x *= -0.5;
+            }
+            if (Math.abs(item.mesh.position.z) > halfL) {
+                item.mesh.position.z = Math.sign(item.mesh.position.z) * halfL;
+                item.vel.z *= -0.5;
+            }
+
+            // Hit water -> trigger distraction splash!
+            if (item.mesh.position.y <= 0.05) {
+                triggerSplash(item.mesh.position.x, item.mesh.position.z, 1.35, true);
+                levelGroup.remove(item.mesh);
+                if (item.mesh.geometry) item.mesh.geometry.dispose();
+                thrownItems.splice(i, 1);
+            }
+        }
+
+        // Bobbing pickups
+        for (let i = 0; i < pickups.length; i++) {
+            const pk = pickups[i];
+            if (pk.taken) continue;
+            pk.mesh.rotation.y += dt * 1.5;
+            pk.mesh.position.y = pk.baseY + Math.sin(totalElapsed * 3 + i) * 0.04;
+        }
+
+        // Expanding water ripples
+        for (let i = splashRipples.length - 1; i >= 0; i--) {
+            const r = splashRipples[i];
+            r.scale += dt * 4.5;
+            r.opacity -= dt * 0.65;
+            r.mesh.scale.set(r.scale, r.scale, 1);
+            r.mat.opacity = Math.max(0, r.opacity);
+            if (r.opacity <= 0) {
+                levelGroup.remove(r.mesh);
+                r.mat.dispose();
+                splashRipples.splice(i, 1);
+            }
+        }
+
+        // Water spray droplets
+        for (let i = splashParticles.length - 1; i >= 0; i--) {
+            const sp = splashParticles[i];
+            sp.vy -= 14 * dt;
+            sp.mesh.position.x += sp.vx * dt;
+            sp.mesh.position.y += sp.vy * dt;
+            sp.mesh.position.z += sp.vz * dt;
+            sp.life -= dt;
+            if (sp.life <= 0) {
+                levelGroup.remove(sp.mesh);
+                splashParticles.splice(i, 1);
+            }
+        }
+
+        // Sputtering fluorescent lights
+        for (let i = 0; i < flickeringLights.length; i++) {
+            const fl = flickeringLights[i];
+            fl.flickerTimer -= dt;
+            if (fl.flickerTimer <= 0) {
+                const isDip = Math.random() < 0.35;
+                if (isDip) {
+                    fl.light.intensity = 0.08;
+                    fl.bulbMat.color.setHex(0x1e292b);
+                    fl.flickerTimer = 0.05 + Math.random() * 0.11;
+                    if (gameState === 'playing' && Math.random() < 0.3) sound.playLightBuzz();
+                } else {
+                    fl.light.intensity = fl.baseIntensity;
+                    fl.bulbMat.color.setHex(0xcfe8ec);
+                    fl.flickerTimer = 0.45 + Math.random() * 2.4;
+                }
+            }
+        }
+    }
+
+    // Resolve strict circle-vs-OBB collisions so the monster never no-clips through platforms, pillars, or walls
+    function resolveMonsterCollisions(lvl) {
+        const radius = 1.45; // Wide collision envelope matching full articulated monster body length
+        const maxBoundX = lvl.roomSize.w / 2 - 1.2 - radius;
+        const maxBoundZ = lvl.roomSize.l / 2 - 1.2 - radius;
+        monster.pos.x = Math.max(-maxBoundX, Math.min(maxBoundX, monster.pos.x));
+        monster.pos.z = Math.max(-maxBoundZ, Math.min(maxBoundZ, monster.pos.z));
+
+        // Run 2 solver passes so corner wedges between pillars & platforms never let the monster clip through
+        for (let pass = 0; pass < 2; pass++) {
+            // 1. Solid Pillars
+            for (let i = 0; i < levelColliders.length; i++) {
+                const box = levelColliders[i];
+                const closestX = Math.max(box.x - box.halfW, Math.min(monster.pos.x, box.x + box.halfW));
+                const closestZ = Math.max(box.z - box.halfD, Math.min(monster.pos.z, box.z + box.halfD));
+                const dx = monster.pos.x - closestX;
+                const dz = monster.pos.z - closestZ;
+                const distSq = dx * dx + dz * dz;
+                if (distSq < radius * radius) {
+                    const dist = Math.sqrt(distSq) || 0.001;
+                    const push = radius - dist;
+                    monster.pos.x += (dx / dist) * push;
+                    monster.pos.z += (dz / dist) * push;
+                }
+            }
+
+            // 2. All Platforms (strict solid walls from pool floor up to surface so monster never clips under/through)
+            for (let i = 0; i < platforms.length; i++) {
+                const pl = platforms[i];
+                const topY = pl.mesh.position.y + 0.325;
+                if (topY <= -0.25) continue; // Only allow passing if tile has completely sunk to pool floor
+
+                const cosR = Math.cos(-pl.rotY);
+                const sinR = Math.sin(-pl.rotY);
+                const relX = monster.pos.x - pl.mesh.position.x;
+                const relZ = monster.pos.z - pl.mesh.position.z;
+                const localX = relX * cosR - relZ * sinR;
+                const localZ = relX * sinR + relZ * cosR;
+
+                const halfW = pl.w / 2;
+                const halfD = pl.d / 2;
+                const clampedX = Math.max(-halfW, Math.min(localX, halfW));
+                const clampedZ = Math.max(-halfD, Math.min(localZ, halfD));
+                const dx = localX - clampedX;
+                const dz = localZ - clampedZ;
+                const distSq = dx * dx + dz * dz;
+
+                if (distSq < radius * radius) {
+                    let pushLocalX = 0;
+                    let pushLocalZ = 0;
+                    if (distSq > 0.00001) {
+                        const dist = Math.sqrt(distSq);
+                        const push = radius - dist;
+                        pushLocalX = (dx / dist) * push;
+                        pushLocalZ = (dz / dist) * push;
+                    } else {
+                        const penX = halfW - Math.abs(localX);
+                        const penZ = halfD - Math.abs(localZ);
+                        if (penX < penZ) {
+                            pushLocalX = (localX >= 0 ? 1 : -1) * (penX + radius);
+                        } else {
+                            pushLocalZ = (localZ >= 0 ? 1 : -1) * (penZ + radius);
+                        }
+                    }
+                    const invCos = Math.cos(pl.rotY);
+                    const invSin = Math.sin(pl.rotY);
+                    monster.pos.x += pushLocalX * invCos - pushLocalZ * invSin;
+                    monster.pos.z += pushLocalX * invSin + pushLocalZ * invCos;
+                }
+            }
+        }
+    }
+
+    function updateMonster(dt) {
+        const lvl = LEVELS[currentLevelIdx];
+        const halfW = lvl.roomSize.w / 2 - 2.8;
+        const halfL = lvl.roomSize.l / 2 - 2.8;
+
+        monster.clickTimer -= dt;
+        if (monster.clickTimer <= 0) {
+            monster.clickTimer = monster.state === 'HUNT' ? 0.65 : 2.6 + Math.random() * 2.2;
+            sound.playMonsterClick();
+        }
+
+        let splashingPlayer = null;
+        let activePlayer = null;
+        for (let i = 0; i < activePlayersCache.length; i++) {
+            const p = activePlayersCache[i];
+            if (p.downed) continue;
+            activePlayer = p;
+            const feetY = p.pos.y - 1.55;
+            // Only counts as in-water if feet are below water surface and not standing on a dry platform
+            if (feetY <= 0.04 && !p.standingPlatform) {
+                splashingPlayer = p;
+                if (p.splashCooldown <= 0) {
+                    triggerSplash(p.pos.x, p.pos.z, 1.15, false);
+                    p.splashCooldown = 0.65;
+                }
+            }
+        }
+
+        if (splashingPlayer && monster.state !== 'INVESTIGATE') {
+            monster.targetPos.set(splashingPlayer.pos.x, -0.35, splashingPlayer.pos.z);
+            if (monster.state !== 'HUNT') {
+                monster.pathRecalcTimer = 0;
+            }
+            monster.state = 'HUNT';
+            monster.alertTimer = 5.5;
+        } else if (!splashingPlayer && monster.state === 'HUNT') {
+            // Player climbed safely back onto a dry platform — monster immediately picks a far water channel and swims away!
+            monster.state = 'RETREAT';
+            monster.alertTimer = 4.5;
+            const refPlayer = activePlayer || players[0];
+            let bestNode = navNodes[0] || { x: -halfW * 0.7, z: -halfL * 0.7 };
+            let bestDist = -1;
+            for (let i = 0; i < navNodes.length; i++) {
+                const d = Math.hypot(navNodes[i].x - refPlayer.pos.x, navNodes[i].z - refPlayer.pos.z);
+                if (d > bestDist) {
+                    bestDist = d;
+                    bestNode = navNodes[i];
+                }
+            }
+            monster.targetPos.set(bestNode.x, -0.35, bestNode.z);
+            monster.pathQueue = computeMonsterPath(bestNode.x, bestNode.z);
+            monster.pathRecalcTimer = 1.2;
+        }
+
+        let moveSpeed = lvl.monsterPatrolSpeed;
+        monster.pathRecalcTimer -= dt;
+
+        if (monster.state === 'PATROL') {
+            if (navNodes.length > 0) {
+                const targetNode = navNodes[monster.patrolNodeIdx % navNodes.length];
+                monster.targetPos.set(targetNode.x, -0.35, targetNode.z);
+                const dToNode = Math.hypot(targetNode.x - monster.pos.x, targetNode.z - monster.pos.z);
+
+                if (dToNode < 1.35 || monster.pathQueue.length === 0) {
+                    // Pick a connected neighboring water channel waypoint (avoiding immediate backtrack when possible)
+                    const currentIdx = monster.patrolNodeIdx % navNodes.length;
+                    const neighbors = navAdj[currentIdx];
+                    if (neighbors && neighbors.length > 0) {
+                        const pick = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        monster.patrolNodeIdx = pick.to;
+                    } else {
+                        monster.patrolNodeIdx = (currentIdx + 1) % navNodes.length;
+                    }
+                    const nextNode = navNodes[monster.patrolNodeIdx];
+                    monster.targetPos.set(nextNode.x, -0.35, nextNode.z);
+                    monster.pathQueue = computeMonsterPath(nextNode.x, nextNode.z);
+                }
+            }
+        } else if (monster.state === 'RETREAT') {
+            moveSpeed = lvl.monsterSpeed * 0.92;
+            monster.alertTimer -= dt;
+            if (monster.alertTimer <= 0 || monster.pathQueue.length === 0) {
+                monster.state = 'PATROL';
+                monster.patrolNodeIdx = findNearestNavNode(monster.pos.x, monster.pos.z);
+            }
+        } else if (monster.state === 'INVESTIGATE') {
+            moveSpeed = lvl.monsterSpeed * 0.88;
+            monster.alertTimer -= dt;
+            if (monster.pathRecalcTimer <= 0) {
+                monster.pathQueue = computeMonsterPath(monster.targetPos.x, monster.targetPos.z);
+                monster.pathRecalcTimer = 0.75;
+            }
+            if (monster.alertTimer <= 0) {
+                monster.state = 'PATROL';
+                monster.patrolNodeIdx = findNearestNavNode(monster.pos.x, monster.pos.z);
+            }
+        } else if (monster.state === 'HUNT') {
+            moveSpeed = lvl.monsterSpeed;
+            monster.alertTimer -= dt;
+            if (monster.pathRecalcTimer <= 0) {
+                monster.pathQueue = computeMonsterPath(monster.targetPos.x, monster.targetPos.z);
+                monster.pathRecalcTimer = 0.35;
+            }
+            if (monster.alertTimer <= 0 && !splashingPlayer) {
+                monster.state = 'PATROL';
+                monster.patrolNodeIdx = findNearestNavNode(monster.pos.x, monster.pos.z);
+            }
+        }
+
+        // Advance along A* water-channel waypoints with smooth steering
+        let steerX = monster.targetPos.x;
+        let steerZ = monster.targetPos.z;
+        if (monster.pathQueue.length > 0) {
+            const wp = monster.pathQueue[0];
+            const wpDist = Math.hypot(wp.x - monster.pos.x, wp.z - monster.pos.z);
+            if (wpDist < 1.15 && monster.pathQueue.length > 1) {
+                monster.pathQueue.shift();
+            }
+            steerX = monster.pathQueue[0].x;
+            steerZ = monster.pathQueue[0].z;
+        }
+
+        _v1.set(steerX - monster.pos.x, 0, steerZ - monster.pos.z);
+        const dist = _v1.length();
+
+        if (dist > 0.22) {
+            _v1.multiplyScalar(1 / dist);
+            const desiredVelX = _v1.x * moveSpeed;
+            const desiredVelZ = _v1.z * moveSpeed;
+            const turnSmooth = Math.min(1, dt * (monster.state === 'HUNT' ? 7.5 : 4.5));
+            monster.vel.x += (desiredVelX - monster.vel.x) * turnSmooth;
+            monster.vel.z += (desiredVelZ - monster.vel.z) * turnSmooth;
+
+            monster.pos.x += monster.vel.x * dt;
+            monster.pos.z += monster.vel.z * dt;
+            resolveMonsterCollisions(lvl);
+
+            if (Math.hypot(monster.vel.x, monster.vel.z) > 0.15) {
+                const targetYaw = Math.atan2(monster.vel.x, monster.vel.z);
+                let diff = targetYaw - monster.heading;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                monster.heading += diff * Math.min(1, dt * 8.0);
+                monster.mesh.rotation.y = monster.heading;
+            }
+        } else if (monster.state === 'INVESTIGATE') {
+            monster.heading += dt * 2.2;
+            monster.pos.x += Math.sin(monster.heading) * 2.2 * dt;
+            monster.pos.z += Math.cos(monster.heading) * 2.2 * dt;
+            resolveMonsterCollisions(lvl);
+            monster.mesh.rotation.y = monster.heading;
+        }
+
+        const targetBreach = monster.state === 'HUNT' ? 0.08 : (monster.state === 'INVESTIGATE' ? -0.14 : -0.42);
+        monster.breachHeight += (targetBreach - monster.breachHeight) * Math.min(1, dt * 4.5);
+
+        monster.mesh.position.set(
+            monster.pos.x,
+            monster.breachHeight + Math.sin(totalElapsed * 8) * 0.05,
+            monster.pos.z
+        );
+
+        const swimFreq = monster.state === 'HUNT' ? 15.0 : 6.5;
+        const swimAmp = monster.state === 'HUNT' ? 0.22 : 0.11;
+
+        for (let i = 0; i < monster.spineSegments.length; i++) {
+            const seg = monster.spineSegments[i];
+            seg.group.position.x = Math.sin(totalElapsed * swimFreq - seg.index * 0.75) * swimAmp;
+            seg.group.rotation.y = Math.cos(totalElapsed * swimFreq - seg.index * 0.75) * swimAmp * 1.4;
+        }
+
+        for (let i = 0; i < monster.limbs.length; i++) {
+            const limb = monster.limbs[i];
+            limb.group.rotation.y = Math.sin(totalElapsed * swimFreq + limb.index * 1.5) * 0.45 * limb.side;
+        }
+
+        const jawOpen = monster.state === 'HUNT' ? 0.62 + Math.sin(totalElapsed * 22) * 0.12 : 0.14;
+        for (let i = 0; i < monster.jawPetals.length; i++) {
+            monster.jawPetals[i].rotation.y = jawOpen;
+        }
+
+        let closestDist = 999;
+        for (let i = 0; i < activePlayersCache.length; i++) {
+            const p = activePlayersCache[i];
+            if (p.downed) continue;
+            const horizDist = Math.hypot(p.pos.x - monster.pos.x, p.pos.z - monster.pos.z);
+            if (horizDist < closestDist) closestDist = horizDist;
+
+            if (horizDist < 13) {
+                const factor = (1 - horizDist / 13) * (monster.state === 'HUNT' ? 0.52 : 0.18);
+                if (factor > p.shakeTrauma) p.shakeTrauma = factor;
+            }
+
+            const feetY = p.pos.y - 1.55;
+            if (horizDist < 1.55 && feetY < 0.22 && !p.standingPlatform && monster.state === 'HUNT') {
+                onPlayerCaught(p);
+                break;
+            }
+        }
+
+        if (closestDist < 15) {
+            const proximity = 1 - closestDist / 15;
+            sound.playHeartbeat(proximity);
+            sound.setMusicTension(monster.state === 'HUNT' ? Math.max(0.65, proximity) : proximity * 0.6);
+        } else {
+            sound.setMusicTension(monster.state === 'HUNT' ? 0.5 : 0.05);
+        }
+    }
+
+    // ----------------------------------------------------------------------------
+    // 11. LOADING SCREEN TRANSITION (BLACK -> FADE IN -> FADE OUT TO BLACK -> GAME)
+    // ----------------------------------------------------------------------------
+    function runLoadingScreenTransition(onComplete) {
+        const screen = document.getElementById('loading-screen');
+        const imgWrapper = document.getElementById('loading-img-wrapper');
+        const img = document.getElementById('loading-img');
+
+        img.src = LOADING_SCREEN_IMAGE_URL;
+        screen.classList.remove('hidden-screen');
+        imgWrapper.classList.remove('fade-in');
+
+        // Pre-compile WebGL shaders while hidden behind black screen to prevent in-game stutter
+        try {
+            renderer.compile(scene, players[0].camera);
+        } catch (e) {}
+
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                imgWrapper.classList.add('fade-in');
+            }, 80);
+        });
+
+        setTimeout(() => {
+            imgWrapper.classList.remove('fade-in');
+        }, 1650);
+
+        setTimeout(() => {
+            screen.classList.add('hidden-screen');
+            if (typeof onComplete === 'function') onComplete();
+        }, 2350);
+    }
+
+    // ----------------------------------------------------------------------------
+    // 12. UI EVENT LISTENERS & KEYBINDS CUSTOMIZATION MODAL
+    // ----------------------------------------------------------------------------
+    let rebindingTarget = null; // { playerKey: 'p1'|'p2', actionKey: string, btnEl: HTMLElement }
+
+    function renderKeybindsUI() {
+        const container = document.getElementById('keybinds-list');
+        container.innerHTML = '';
+
+        ['p1', 'p2'].forEach((pKey) => {
+            const col = document.createElement('div');
+            col.className = 'border border-slate-800/80 bg-black/50 p-4 rounded-lg';
+
+            const header = document.createElement('h3');
+            header.className = 'font-horror text-lg text-red-400 mb-3 tracking-widest';
+            header.textContent = pKey === 'p1' ? 'PLAYER 1 (SOLO / LEFT SCREEN)' : 'PLAYER 2 (CO-OP RIGHT SCREEN)';
+            col.appendChild(header);
+
+            Object.keys(ACTION_LABELS).forEach((actionKey) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between py-1.5 border-b border-slate-900 last:border-b-0';
+
+                const label = document.createElement('span');
+                label.className = 'text-xs text-slate-300';
+                label.textContent = ACTION_LABELS[actionKey];
+
+                const btn = document.createElement('button');
+                btn.className = 'px-3 py-1 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 text-xs font-bold text-slate-100 min-w-[96px] text-center cursor-pointer';
+                btn.textContent = formatKeyCode(keybinds[pKey][actionKey]);
+                btn.addEventListener('click', () => {
+                    if (rebindingTarget && rebindingTarget.btnEl) {
+                        rebindingTarget.btnEl.textContent = formatKeyCode(keybinds[rebindingTarget.playerKey][rebindingTarget.actionKey]);
+                        rebindingTarget.btnEl.classList.remove('border-red-500', 'text-red-400');
+                    }
+                    rebindingTarget = { playerKey: pKey, actionKey, btnEl: btn };
+                    btn.textContent = 'PRESS KEY...';
+                    btn.classList.add('border-red-500', 'text-red-400');
+                });
+
+                row.appendChild(label);
+                row.appendChild(btn);
+                col.appendChild(row);
+            });
+
+            container.appendChild(col);
+        });
+    }
+
+    function startNewGame(mode) {
+        sound.init();
+        gameMode = mode;
+        document.getElementById('menu-overlay').classList.add('hidden');
+        document.getElementById('pause-overlay').classList.add('hidden');
+        document.getElementById('split-divider').classList.toggle('hidden', mode !== 'coop');
+
+        loadLevel(0, false);
+
+        runLoadingScreenTransition(() => {
+            gameState = 'playing';
+            updateActivePlayersVisibility();
+            const lvl = LEVELS[0];
+            showRoundBanner(lvl.name, lvl.sub);
+            if (mode === 'solo' && canvas.requestPointerLock) {
+                try { canvas.requestPointerLock(); } catch (e) {}
+            }
+        });
+    }
+
+    document.getElementById('btn-solo').addEventListener('click', () => startNewGame('solo'));
+    document.getElementById('btn-coop').addEventListener('click', () => startNewGame('coop'));
+
+    document.getElementById('btn-open-keybinds').addEventListener('click', () => {
+        sound.init();
+        renderKeybindsUI();
+        document.getElementById('keybinds-overlay').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-pause-keybinds').addEventListener('click', () => {
+        renderKeybindsUI();
+        document.getElementById('keybinds-overlay').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-close-keybinds').addEventListener('click', () => {
+        rebindingTarget = null;
+        document.getElementById('keybinds-overlay').classList.add('hidden');
+    });
+
+    document.getElementById('btn-reset-keybinds').addEventListener('click', () => {
+        rebindingTarget = null;
+        keybinds = JSON.parse(JSON.stringify(DEFAULT_KEYBINDS));
+        saveKeybinds();
+        renderKeybindsUI();
+    });
+
+    document.getElementById('btn-resume').addEventListener('click', () => {
+        if (gameState === 'paused') {
+            gameState = 'playing';
+            document.getElementById('pause-overlay').classList.add('hidden');
+            if (gameMode === 'solo' && canvas.requestPointerLock) {
+                try { canvas.requestPointerLock(); } catch (e) {}
+            }
+        }
+    });
+
+    document.getElementById('btn-quit-menu').addEventListener('click', () => {
+        gameState = 'menu';
+        document.getElementById('pause-overlay').classList.add('hidden');
+        document.getElementById('split-divider').classList.add('hidden');
+        document.getElementById('menu-overlay').classList.remove('hidden');
+        loadLevel(0, false);
+        updateActivePlayersVisibility();
+    });
+
+    // Mouse look in Solo Mode (when pointer locked or dragging)
+    let isDraggingLook = false;
+    window.addEventListener('mousedown', (e) => {
+        sound.init();
+        if (gameState === 'playing' && gameMode === 'solo') {
+            if (!document.pointerLockElement && e.target === canvas && canvas.requestPointerLock) {
+                try { canvas.requestPointerLock(); } catch (err) {}
+            }
+            isDraggingLook = true;
+            if (e.button === 0) handleInteractOrThrow(players[0], false);
+            if (e.button === 2) handleInteractOrThrow(players[0], true);
+        }
+    });
+    window.addEventListener('mouseup', () => { isDraggingLook = false; });
+
+    window.addEventListener('mousemove', (e) => {
+        if (gameState !== 'playing') return;
+        if (document.pointerLockElement === canvas || isDraggingLook) {
+            const sens = 0.0023;
+            players[0].yaw -= e.movementX * sens;
+            players[0].pitch = Math.max(-1.35, Math.min(1.35, players[0].pitch - e.movementY * sens));
+        }
+    });
+
+    window.addEventListener('keydown', (e) => {
+        sound.init();
+
+        // Intercept key press when rebinding a control
+        if (rebindingTarget) {
+            e.preventDefault();
+            if (e.code !== 'Escape') {
+                keybinds[rebindingTarget.playerKey][rebindingTarget.actionKey] = e.code;
+                saveKeybinds();
+            }
+            rebindingTarget = null;
+            renderKeybindsUI();
+            return;
+        }
+
+        if (e.code === 'Escape') {
+            if (!document.getElementById('keybinds-overlay').classList.contains('hidden')) {
+                document.getElementById('keybinds-overlay').classList.add('hidden');
+                return;
+            }
+            if (gameState === 'playing') {
+                gameState = 'paused';
+                if (document.pointerLockElement) document.exitPointerLock();
+                document.getElementById('pause-overlay').classList.remove('hidden');
+            } else if (gameState === 'paused') {
+                gameState = 'playing';
+                document.getElementById('pause-overlay').classList.add('hidden');
+            }
+            return;
+        }
+
+        if (!keysDown[e.code]) {
+            keysDown[e.code] = true;
+            if (gameState === 'playing') {
+                // Player 1 discrete actions
+                if (e.code === keybinds.p1.interact) handleInteractOrThrow(players[0], false);
+                if (e.code === keybinds.p1.throwItem) handleInteractOrThrow(players[0], true);
+                if (e.code === keybinds.p1.flashlight) {
+                    players[0].flashlightOn = !players[0].flashlightOn;
+                    players[0].flashlight.intensity = players[0].flashlightOn ? 2.6 : 0;
+                }
+
+                // Player 2 discrete actions (in Co-op)
+                if (gameMode === 'coop') {
+                    if (e.code === keybinds.p2.interact) handleInteractOrThrow(players[1], false);
+                    if (e.code === keybinds.p2.throwItem) handleInteractOrThrow(players[1], true);
+                    if (e.code === keybinds.p2.flashlight) {
+                        players[1].flashlightOn = !players[1].flashlightOn;
+                        players[1].flashlight.intensity = players[1].flashlightOn ? 2.6 : 0;
+                    }
+                }
+            }
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        keysDown[e.code] = false;
+    });
+
+    window.addEventListener('resize', () => {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ----------------------------------------------------------------------------
+    // 13. MAIN 60 FPS GAME LOOP
+    // ----------------------------------------------------------------------------
+    let lastTime = performance.now();
+
+    function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min(0.05, (now - lastTime) / 1000);
+        lastTime = now;
+
+        if (gameState === 'menu') {
+            totalElapsed += dt;
+            menuOrbitAngle += dt * 0.22;
+            updatePlatforms(dt);
+            updateThrownItemsAndEffects(dt);
+            updateMonster(dt);
+
+            const cam = players[0].camera;
+            cam.aspect = window.innerWidth / window.innerHeight;
+            cam.updateProjectionMatrix();
+            cam.position.set(Math.sin(menuOrbitAngle) * 11, 3.6, Math.cos(menuOrbitAngle) * 15);
+            cam.lookAt(0, 0.4, 0);
+
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.setScissorTest(false);
+            renderer.render(scene, cam);
+            return;
+        }
+
+        if (gameState === 'paused' || gameState === 'jumpscare') {
+            return;
+        }
+
+        // Playing state
+        totalElapsed += dt;
+        updatePlatforms(dt);
+        updateThrownItemsAndEffects(dt);
+        updateMonster(dt);
+
+        for (let i = 0; i < activePlayersCache.length; i++) {
+            updatePlayer(activePlayersCache[i], dt);
+        }
+
+        // Check Level Completion
+        let advanceLevel = false;
+        if (gameMode === 'solo') {
+            if (players[0].reachedExit) advanceLevel = true;
+        } else {
+            const p1Ready = players[0].reachedExit || players[0].downed;
+            const p2Ready = players[1].reachedExit || players[1].downed;
+            if ((players[0].reachedExit || players[1].reachedExit) && p1Ready && p2Ready) {
+                advanceLevel = true;
+            }
+        }
+
+        if (advanceLevel) {
+            sound.playPortalChime();
+            loadLevel((currentLevelIdx + 1) % LEVELS.length, true);
+        }
+
+        // Render Solo or Split-Screen Viewports
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (gameMode === 'solo') {
+            const cam = players[0].camera;
+            cam.aspect = w / h;
+            cam.updateProjectionMatrix();
+            renderer.setScissorTest(false);
+            renderer.setViewport(0, 0, w, h);
+            renderer.render(scene, cam);
+        } else {
+            const halfW = Math.floor(w / 2);
+            renderer.setScissorTest(true);
+
+            // Left Viewport: Player 1
+            const cam1 = players[0].camera;
+            cam1.aspect = halfW / h;
+            cam1.updateProjectionMatrix();
+            renderer.setViewport(0, 0, halfW, h);
+            renderer.setScissor(0, 0, halfW, h);
+            renderer.render(scene, cam1);
+
+            // Right Viewport: Player 2
+            const cam2 = players[1].camera;
+            cam2.aspect = (w - halfW) / h;
+            cam2.updateProjectionMatrix();
+            renderer.setViewport(halfW, 0, w - halfW, h);
+            renderer.setScissor(halfW, 0, w - halfW, h);
+            renderer.render(scene, cam2);
+        }
+    }
+
+    // Boot: Load Room 01 behind initial black loading screen transition
+    window.addEventListener('load', () => {
+        loadLevel(0, false);
+        runLoadingScreenTransition();
+        lastTime = performance.now();
+        requestAnimationFrame(animate);
+    });
+    </script>
+</body>
+</html>
