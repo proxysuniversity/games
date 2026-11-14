@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Don't Splash — 3D Poolrooms Survival Horror</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #010304;
+            font-family: 'Courier Prime', monospace;
+            color: #d6e4e5;
+        }
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+        .font-horror {
+            font-family: 'Oswald', sans-serif;
+            letter-spacing: 0.14em;
+        }
+        /* Subtle analog lens vignette */
+        .analog-vignette {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            background: radial-gradient(circle at center, transparent 52%, rgba(0, 0, 0, 0.88) 100%);
+        }
+        /* Split screen subtle divider line */
+        .split-divider {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: rgba(180, 210, 215, 0.18);
+            z-index: 12;
+            pointer-events: none;
+        }
+        /* Round start title fade-in and fade-out after 2s */
+        #round-banner {
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.45s ease-in-out;
+        }
+        #round-banner.visible {
+            opacity: 1;
+        }
+        /* Loading screen black fade-in and fade-out */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background-color: #000000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.65s ease-in-out;
+            pointer-events: all;
+        }
+        #loading-screen.hidden-screen {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #loading-img-wrapper {
+            opacity: 0;
+            transition: opacity 0.75s ease-in-out;
+            pointer-events: none;
+        }
+        #loading-img-wrapper.fade-in {
+            opacity: 1;
+        }
+        #loading-img {
+            pointer-events: none;
+            -webkit-user-drag: none;
+            user-select: none;
+        }
+        /* Jump scare violent strobe animation */
+        @keyframes scareStrobe {
+            0%   { transform: scale(1.05) translate(0px, 0px) rotate(0deg); filter: contrast(1.9) brightness(1.1) saturate(1.4); }
+            15%  { transform: scale(1.22) translate(-18px, 12px) rotate(-2deg); filter: contrast(2.4) brightness(0.75) invert(0.12); }
+            30%  { transform: scale(1.15) translate(20px, -14px) rotate(2.5deg); filter: contrast(2.1) brightness(1.3); }
+            45%  { transform: scale(1.28) translate(-12px, -16px) rotate(-1.5deg); filter: contrast(2.6) brightness(0.6); }
+            60%  { transform: scale(1.18) translate(16px, 10px) rotate(2deg); filter: contrast(2.2) brightness(1.25); }
+            75%  { transform: scale(1.30) translate(-14px, 8px) rotate(-2.5deg); filter: contrast(2.5) brightness(0.8); }
+            100% { transform: scale(1.12) translate(0px, 0px) rotate(0deg); filter: contrast(2.0) brightness(1.0); }
+        }
+        .scare-active {
+            animation: scareStrobe 0.14s infinite;
+        }
+        .btn-horror {
+            background: rgba(8, 14, 16, 0.85);
+            border: 1px solid rgba(180, 210, 215, 0.28);
+            transition: all 0.16s ease;
+        }
+        .btn-horror:hover {
+            background: rgba(120, 18, 18, 0.45);
+            border-color: rgba(239, 68, 68, 0.85);
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(220, 38, 38, 0.35);
+        }
+        /* Custom scrollbar for keybinds modal */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #050809; }
+        ::-webkit-scrollbar-thumb { background: #263538; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <!-- 3D WebGL Viewport -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Subtle Lens Vignette (No Game UI HUD) -->
+    <div class="analog-vignette"></div>
+    <div id="split-divider" class="split-divider hidden"></div>
+
+    <!-- Title Screen Preview (Logo and Live Orbiting Poolrooms BG Only — No Buttons) -->
+    <div id="menu-overlay" class="fixed inset-0 z-30 flex items-center justify-center p-4 pointer-events-none">
+        <div class="max-w-xl w-full p-6 sm:p-10 text-center flex flex-col items-center">
+            <img id="game-logo-img" src="https://cdn-0001.qstv.on.epicgames.com/hgIAokQtMWztMeTlqS/image/logo_s.png" alt="DON'T SPLASH" draggable="false" oncontextmenu="return false;" class="w-full max-w-lg max-h-56 sm:max-h-64 object-contain drop-shadow-[0_10px_35px_rgba(0,0,0,0.95)] pointer-events-none select-none" />
+        </div>
+    </div>
+
+    <script>
+    // ============================================================================
+    // DON'T SPLASH — LIVE MAIN MENU PREVIEW (LOGO + ORBITING 3D POOLROOMS)
+    // ============================================================================
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('dragstart', (e) => e.preventDefault());
+
+    // ----------------------------------------------------------------------------
+    // 1. GLOBAL STATE & SCENE SETUP
+    // ----------------------------------------------------------------------------
+    let gameState = 'menu';
+    let gameMode = 'solo';
+    let currentLevelIndex = 0;
+    let totalElapsed = 0;
+    let menuOrbitAngle = 0.4;
+    const keysDown = {};
+
+    const keybinds = {
+        p1: { interact: 'KeyE', throwItem: 'KeyF', flashlight: 'KeyT' }
+    };
+
+    const canvas = document.getElementById('game-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.92;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020608);
+    scene.fog = new THREE.FogExp2(0x020709, 0.036);
+
+    const ambientLight = new THREE.AmbientLight(0x162b33, 0.75);
+    scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0x284b57, 0x050b0d, 0.65);
+    scene.add(hemiLight);
+
+    // ----------------------------------------------------------------------------
+    // 2. PROCEDURAL AUDIO (SUBTLE HORROR AMBIENCE ON INTERACTION)
+    // ----------------------------------------------------------------------------
+    const sound = {
+        ctx: null,
+        started: false,
+        init() {
+            if (this.started) return;
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                this.ctx = new AudioCtx();
+                this.started = true;
+
+                const master = this.ctx.createGain();
+                master.gain.value = 0.14;
+                master.connect(this.ctx.destination);
+
+                [55, 58.27, 82.41].forEach((freq) => {
+                    const osc = this.ctx.createOscillator();
+                    const filter = this.ctx.createBiquadFilter();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = freq;
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 135;
+                    osc.connect(filter);
+                    filter.connect(master);
+                    osc.start();
+                });
+            } catch (e) {}
+        }
+    };
+
+    // ----------------------------------------------------------------------------
+    // 3. PROCEDURAL POOLROOMS TEXTURES & MATERIALS
+    // ----------------------------------------------------------------------------
+    function createTileTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 256;
+        const ctx = c.getContext('2d');
+
+        ctx.fillStyle = '#486066';
+        ctx.fillRect(0, 0, 256, 256);
+
+        const step = 64;
+        for (let y = 0; y < 256; y += step) {
+            for (let x = 0; x < 256; x += step) {
+                const shade = 68 + Math.floor(Math.random() * 14);
+                ctx.fillStyle = `rgb(${shade}, ${shade + 24}, ${shade + 30})`;
+                ctx.fillRect(x + 2, y + 2, step - 4, step - 4);
+            }
+        }
+
+        ctx.strokeStyle = '#182427';
+        ctx.lineWidth = 3;
+        for (let i = 0; i <= 256; i += step) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, 256);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, i);
+            ctx.lineTo(256, i);
+            ctx.stroke();
+        }
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+    }
+
+    const baseTileTex = createTileTexture();
+
+    function getTileMaterial(rx, ry) {
+        const tex = baseTileTex.clone();
+        tex.needsUpdate = true;
+        tex.repeat.set(rx, ry);
+        return new THREE.MeshStandardMaterial({
+            map: tex,
+            roughness: 0.35,
+            metalness: 0.08
+        });
+    }
+
+    const waterMat = new THREE.MeshStandardMaterial({
+        color: 0x0b3640,
+        emissive: 0x031317,
+        roughness: 0.14,
+        metalness: 0.65,
+        transparent: true,
+        opacity: 0.84
+    });
+
+    const fixtureGlowMat = new THREE.MeshBasicMaterial({ color: 0xbef5ff });
+
+    // ----------------------------------------------------------------------------
+    // 4. PLAYERS, ENVIRONMENT, PLATFORMS & MONSTER
+    // ----------------------------------------------------------------------------
+    const players = [
+        {
+            camera: new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 120),
+            yaw: 0,
+            pitch: 0,
+            flashlightOn: true,
+            flashlight: new THREE.SpotLight(0xdff8ff, 2.2, 32, Math.PI / 5, 0.45, 1.2)
+        }
+    ];
+
+    const levelGroup = new THREE.Group();
+    scene.add(levelGroup);
+
+    const animatedPlatforms = [];
+    const flickeringLights = [];
+    const splashRipples = [];
+
+    // Articulated Kamogorgan Predator (swimming along open water channels)
+    const monster = new THREE.Group();
+    const monsterBodyMat = new THREE.MeshStandardMaterial({
+        color: 0x182022,
+        roughness: 0.25,
+        metalness: 0.35
+    });
+    const monsterSpineMat = new THREE.MeshStandardMaterial({
+        color: 0x2b1b1c,
+        roughness: 0.4
+    });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a });
+
+    const spineSegments = [];
+    for (let i = 0; i < 7; i++) {
+        const radius = 0.44 - i * 0.045;
+        const seg = new THREE.Mesh(new THREE.SphereGeometry(radius, 12, 10), monsterBodyMat);
+        seg.scale.set(1.0, 0.72, 1.45);
+        seg.position.set(0, -0.05, -i * 0.55);
+        monster.add(seg);
+        spineSegments.push(seg);
+
+        if (i < 5) {
+            const fin = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.48 - i * 0.05, 5), monsterSpineMat);
+            fin.position.set(0, 0.32 - i * 0.03, -i * 0.55);
+            fin.rotation.x = -0.35;
+            monster.add(fin);
+        }
+    }
+
+    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
+    leftEye.position.set(-0.22, 0.12, 0.32);
+    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
+    rightEye.position.set(0.22, 0.12, 0.32);
+    monster.add(leftEye, rightEye);
+
+    const monsterGlow = new THREE.PointLight(0x991b1b, 1.1, 7);
+    monsterGlow.position.set(0, 0.6, 0.2);
+    monster.add(monsterGlow);
+    scene.add(monster);
+
+    const monsterWaypoints = [
+        new THREE.Vector3(-6.5, -0.15, -9.5),
+        new THREE.Vector3(6.5, -0.15, -9.5),
+        new THREE.Vector3(6.5, -0.15, 0),
+        new THREE.Vector3(-6.5, -0.15, 0),
+        new THREE.Vector3(-6.5, -0.15, 9.5),
+        new THREE.Vector3(6.5, -0.15, 9.5),
+        new THREE.Vector3(0, -0.15, 9.5),
+        new THREE.Vector3(0, -0.15, -9.5)
+    ];
+    let currentWaypointIdx = 0;
+
+    function clearLevel() {
+        while (levelGroup.children.length > 0) {
+            const child = levelGroup.children[0];
+            levelGroup.remove(child);
+            if (child.geometry) child.geometry.dispose();
+        }
+        animatedPlatforms.length = 0;
+        flickeringLights.length = 0;
+        splashRipples.length = 0;
+    }
+
+    function loadLevel(index) {
+        currentLevelIndex = index;
+        clearLevel();
+
+        // Pool basin floor & water surface
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(30, 0.5, 34), getTileMaterial(10, 12));
+        floor.position.set(0, -1.6, 0);
+        levelGroup.add(floor);
+
+        const water = new THREE.Mesh(new THREE.PlaneGeometry(30, 34, 24, 24), waterMat);
+        water.rotation.x = -Math.PI / 2;
+        water.position.y = 0;
+        levelGroup.add(water);
+
+        // Perimeter tiled walls & ceiling
+        const wallPositions = [
+            { pos: [0, 3.2, -17], size: [30, 9.6, 0.6], rep: [10, 3] },
+            { pos: [0, 3.2, 17], size: [30, 9.6, 0.6], rep: [10, 3] },
+            { pos: [-15, 3.2, 0], size: [0.6, 9.6, 34], rep: [12, 3] },
+            { pos: [15, 3.2, 0], size: [0.6, 9.6, 34], rep: [12, 3] }
+        ];
+        wallPositions.forEach((w) => {
+            const wall = new THREE.Mesh(new THREE.BoxGeometry(...w.size), getTileMaterial(...w.rep));
+            wall.position.set(...w.pos);
+            levelGroup.add(wall);
+        });
+
+        const ceiling = new THREE.Mesh(new THREE.BoxGeometry(30, 0.5, 34), getTileMaterial(10, 12));
+        ceiling.position.set(0, 8.0, 0);
+        levelGroup.add(ceiling);
+
+        // Stepped Poolrooms platforms with open central & cross-basin monster swim channels
+        const platformDefs = [
+            { pos: [0, -0.35, 13.2], size: [7.5, 1.4, 4.2], rep: [3, 2], bob: false },
+            { pos: [-3.4, -0.35, 6.2], size: [3.6, 1.4, 3.6], rep: [2, 2], bob: true, phase: 0.0 },
+            { pos: [3.4, -0.35, 6.2], size: [3.6, 1.4, 3.6], rep: [2, 2], bob: true, phase: 1.6 },
+            { pos: [-3.4, -0.35, -3.2], size: [3.6, 1.4, 3.6], rep: [2, 2], bob: true, phase: 3.1 },
+            { pos: [3.4, -0.35, -3.2], size: [3.6, 1.4, 3.6], rep: [2, 2], bob: true, phase: 4.7 },
+            { pos: [0, -0.35, -12.6], size: [7.5, 1.4, 4.2], rep: [3, 2], bob: false }
+        ];
+        platformDefs.forEach((p) => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...p.size), getTileMaterial(...p.rep));
+            mesh.position.set(...p.pos);
+            levelGroup.add(mesh);
+            if (p.bob) {
+                animatedPlatforms.push({ mesh, baseY: p.pos[1], phase: p.phase });
+            }
+        });
+
+        // Tiled columns framing the basin
+        const pillarCoords = [
+            [-9.5, -6.5], [9.5, -6.5],
+            [-9.5, 6.5], [9.5, 6.5]
+        ];
+        pillarCoords.forEach(([px, pz]) => {
+            const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 9.5, 1.5), getTileMaterial(1, 4));
+            pillar.position.set(px, 3.2, pz);
+            levelGroup.add(pillar);
+        });
+
+        // Flickering ceiling fluorescent fixtures
+        const lightZ = [-9.5, 0, 9.5];
+        lightZ.forEach((zPos, i) => {
+            const panel = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.14, 0.85), fixtureGlowMat);
+            panel.position.set(0, 7.68, zPos);
+            levelGroup.add(panel);
+
+            const pt = new THREE.PointLight(0x88d4e6, 1.55, 24, 1.6);
+            pt.position.set(0, 7.2, zPos);
+            levelGroup.add(pt);
+            flickeringLights.push({ light: pt, panel, baseIntensity: 1.55, seed: i * 19.3 });
+        });
+
+        // Glowing exit doorway at the far end of the poolroom
+        const exitFrame = new THREE.Mesh(
+            new THREE.BoxGeometry(2.6, 3.4, 0.35),
+            new THREE.MeshBasicMaterial({ color: 0x34d399 })
+        );
+        exitFrame.position.set(0, 1.85, -16.65);
+        levelGroup.add(exitFrame);
+
+        const exitGlow = new THREE.PointLight(0x10b981, 1.4, 12);
+        exitGlow.position.set(0, 2.0, -15.4);
+        levelGroup.add(exitGlow);
+
+        monster.position.copy(monsterWaypoints[0]);
+    }
+
+    function updatePlatforms(dt) {
+        for (let i = 0; i < animatedPlatforms.length; i++) {
+            const p = animatedPlatforms[i];
+            p.mesh.position.y = p.baseY + Math.sin(totalElapsed * 1.4 + p.phase) * 0.08;
+        }
+        for (let i = 0; i < flickeringLights.length; i++) {
+            const f = flickeringLights[i];
+            const wave = Math.sin(totalElapsed * 17 + f.seed) * Math.sin(totalElapsed * 43 + f.seed * 2);
+            const flicker = wave > 0.72 ? 0.25 : 1.0;
+            f.light.intensity = f.baseIntensity * flicker;
+        }
+    }
+
+    function updateThrownItemsAndEffects(dt) {
+        for (let i = splashRipples.length - 1; i >= 0; i--) {
+            const r = splashRipples[i];
+            r.age += dt;
+            const progress = r.age / r.maxAge;
+            if (progress >= 1) {
+                levelGroup.remove(r.mesh);
+                r.mesh.geometry.dispose();
+                r.mesh.material.dispose();
+                splashRipples.splice(i, 1);
+            } else {
+                const s = 1 + progress * 4.5;
+                r.mesh.scale.set(s, s, 1);
+                r.mesh.material.opacity = (1 - progress) * 0.45;
+            }
+        }
+    }
+
+    function spawnWaterWake(x, z) {
+        if (splashRipples.length > 18) return;
+        const ringGeo = new THREE.RingGeometry(0.18, 0.28, 24);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0x67e8f9,
+            transparent: true,
+            opacity: 0.42,
+            side: THREE.DoubleSide
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(x, 0.02, z);
+        levelGroup.add(ring);
+        splashRipples.push({ mesh: ring, age: 0, maxAge: 1.4 });
+    }
+
+    let wakeTimer = 0;
+    function updateMonster(dt) {
+        const target = monsterWaypoints[currentWaypointIdx];
+        const dx = target.x - monster.position.x;
+        const dz = target.z - monster.position.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist < 0.6) {
+            currentWaypointIdx = (currentWaypointIdx + 1) % monsterWaypoints.length;
+        } else {
+            const speed = 3.2;
+            monster.position.x += (dx / dist) * speed * dt;
+            monster.position.z += (dz / dist) * speed * dt;
+            const desiredYaw = Math.atan2(dx, dz);
+            monster.rotation.y = desiredYaw;
+        }
+
+        // Serpentine swim undulation
+        for (let i = 0; i < spineSegments.length; i++) {
+            spineSegments[i].position.x = Math.sin(totalElapsed * 6.5 - i * 0.75) * (0.06 + i * 0.025);
+        }
+
+        wakeTimer += dt;
+        if (wakeTimer > 0.28) {
+            wakeTimer = 0;
+            spawnWaterWake(monster.position.x, monster.position.z);
+        }
+    }
+
+    function handleInteractOrThrow() {}
+
+    // ----------------------------------------------------------------------------
+    // 11. MENU PREVIEW MODE (No buttons, no loading screen)
+    // ----------------------------------------------------------------------------
+    // Mouse look in Solo Mode (when pointer locked or dragging)
+    let isDraggingLook = false;
+    window.addEventListener('mousedown', (e) => {
+        sound.init();
+        if (gameState === 'playing' && gameMode === 'solo') {
+            if (!document.pointerLockElement && e.target === canvas && canvas.requestPointerLock) {
+                try { canvas.requestPointerLock(); } catch (err) {}
+            }
+            isDraggingLook = true;
+            if (e.button === 0) handleInteractOrThrow(players[0], false);
+            if (e.button === 2) handleInteractOrThrow(players[0], true);
+        }
+    });
+    window.addEventListener('mouseup', () => { isDraggingLook = false; });
+
+    window.addEventListener('mousemove', (e) => {
+        if (gameState !== 'playing') return;
+        if (document.pointerLockElement === canvas || isDraggingLook) {
+            const sens = 0.0023;
+            players[0].yaw -= e.movementX * sens;
+            players[0].pitch = Math.max(-1.35, Math.min(1.35, players[0].pitch - e.movementY * sens));
+        }
+    });
+
+    window.addEventListener('keydown', (e) => {
+        sound.init();
+
+        if (!keysDown[e.code]) {
+            keysDown[e.code] = true;
+            if (gameState === 'playing') {
+                if (e.code === keybinds.p1.interact) handleInteractOrThrow(players[0], false);
+                if (e.code === keybinds.p1.throwItem) handleInteractOrThrow(players[0], true);
+                if (e.code === keybinds.p1.flashlight) {
+                    players[0].flashlightOn = !players[0].flashlightOn;
+                    players[0].flashlight.intensity = players[0].flashlightOn ? 2.6 : 0;
+                }
+            }
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        keysDown[e.code] = false;
+    });
+
+    window.addEventListener('resize', () => {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ----------------------------------------------------------------------------
+    // 13. MAIN 60 FPS GAME LOOP
+    // ----------------------------------------------------------------------------
+    let lastTime = performance.now();
+
+    function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min(0.05, (now - lastTime) / 1000);
+        lastTime = now;
+
+        if (gameState === 'menu') {
+            totalElapsed += dt;
+            menuOrbitAngle += dt * 0.22;
+            updatePlatforms(dt);
+            updateThrownItemsAndEffects(dt);
+            updateMonster(dt);
+
+            const cam = players[0].camera;
+            cam.aspect = window.innerWidth / window.innerHeight;
+            cam.updateProjectionMatrix();
+            cam.position.set(Math.sin(menuOrbitAngle) * 11, 3.6, Math.cos(menuOrbitAngle) * 15);
+            cam.lookAt(0, 0.4, 0);
+
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.setScissorTest(false);
+            renderer.render(scene, cam);
+            return;
+        }
+    }
+
+    // Boot: Load Room 01 immediately into live orbiting logo + background preview
+    window.addEventListener('load', () => {
+        loadLevel(0, false);
+        lastTime = performance.now();
+        requestAnimationFrame(animate);
+    });
+    </script>
+</body>
+</html>
